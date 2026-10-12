@@ -81,13 +81,13 @@ test('live status', () => {
 test('highlights', () => {
   const name = id => game.players[id].name;
   const h3 = roundHighlights(game, 3, name);
-  assert.ok(h3.some(l => l.includes('Ana nailed a zero bid (+30)')));
-  assert.ok(h3.some(l => l.includes('Best round: Ben +60')));
-  assert.ok(!h3.some(l => l.includes('takes the lead')), 'tie = no sole leader');
-  assert.ok(roundHighlights(game, 2, name).some(l => l.includes('Cat takes the lead')));
+  assert.ok(h3.some(l => l.text.includes('Ana nailed a zero bid (+30)')));
+  assert.ok(h3.some(l => l.text.includes('Best round: Ben +60')));
+  assert.ok(!h3.some(l => l.text.includes('takes the lead')), 'tie = no sole leader');
+  assert.ok(roundHighlights(game, 2, name).some(l => l.text.includes('Cat takes the lead')));
   const done = { ...game, phase: 'done', round: 3 };
   const g = gameHighlights(done, name);
-  assert.ok(g.some(l => l.includes('Biggest round: Ben +60 in round 3')));
+  assert.ok(g.some(l => l.text.includes('Biggest round: Ben +60 in round 3')));
 });
 
 import { scoreFor, bidHint, tricksInRound, bonusKeys } from '../scoring.js';
@@ -129,7 +129,7 @@ test('destroyed tricks shrink the round and auto-fill', () => {
 });
 
 test('bid hints', () => {
-  assert.match(bidHint({ bids: { 5: { a: 3, b: 3 } } }, 5), /going down/);
-  assert.match(bidHint({ bids: { 5: { a: 1, b: 2 } } }, 5), /2 spare tricks/);
-  assert.match(bidHint({ bids: { 5: { a: 2, b: 3 } } }, 5), /exactly 5/);
+  assert.match(bidHint({ bids: { 5: { a: 3, b: 3 } } }, 5).text, /going down/);
+  assert.match(bidHint({ bids: { 5: { a: 1, b: 2 } } }, 5).text, /2 spare tricks/);
+  assert.match(bidHint({ bids: { 5: { a: 2, b: 3 } } }, 5).text, /exactly 5/);
 });

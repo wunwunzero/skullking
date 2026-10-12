@@ -52,9 +52,9 @@ export function bidHint(game, round) {
   const bids = Object.values(game.bids?.[round] || {});
   if (!bids.length) return null;
   const sum = bids.reduce((a, b) => a + b, 0), d = sum - round;
-  if (d > 0) return `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: someone's going down ⚔️`;
-  if (d < 0) return `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: ${-d} spare trick${d < -1 ? 's' : ''} up for grabs 🎁`;
-  return `Bids total exactly ${round}: every trick is spoken for 🤝`;
+  if (d > 0) return { icon: 'swords', text: `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: someone's going down` };
+  if (d < 0) return { icon: 'spare', text: `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: ${-d} spare trick${d < -1 ? 's' : ''} up for grabs` };
+  return { icon: 'equal', text: `Bids total exactly ${round}: every trick is spoken for` };
 }
 
 export function sortedPlayers(game) {
@@ -152,16 +152,16 @@ export function roundHighlights(game, round, name) {
     bid: game.bids?.[round]?.[p.id], res: game.results?.[round]?.[p.id] }));
 
   for (const x of scores) {
-    if (x.bid === 0 && x.res?.tricks === 0 && round >= 3) lines.push(`🎯 ${name(x.id)} nailed a zero bid (+${x.s})`);
-    if (x.res?.skullKing && x.s > 0) lines.push(`🧜 ${name(x.id)}'s Mermaid sank the Skull King (+40)`);
+    if (x.bid === 0 && x.res?.tricks === 0 && round >= 3) lines.push({ icon: 'target', text: `${name(x.id)} nailed a zero bid (+${x.s})` });
+    if (x.res?.skullKing && x.s > 0) lines.push({ icon: 'crown', text: `${name(x.id)}'s Mermaid sank the Skull King (+40)` });
   }
   const top = [...scores].sort((a, b) => b.s - a.s);
-  if (top[0] && top[0].s >= 40 && !(top[1] && top[1].s === top[0].s)) lines.push(`💰 Best round: ${name(top[0].id)} +${top[0].s}`);
+  if (top[0] && top[0].s >= 40 && !(top[1] && top[1].s === top[0].s)) lines.push({ icon: 'up', text: `Best round: ${name(top[0].id)} +${top[0].s}` });
   const low = top[top.length - 1];
-  if (low && low.s <= -20 && !(top[top.length - 2] && top[top.length - 2].s === low.s)) lines.push(`💀 Ouch: ${name(low.id)} ${low.s}`);
+  if (low && low.s <= -20 && !(top[top.length - 2] && top[top.length - 2].s === low.s)) lines.push({ icon: 'down', text: `Ouch: ${name(low.id)} ${low.s}` });
   if (round > 1) {
     const before = leaderAfter(game, t, round - 1), now = leaderAfter(game, t, round);
-    if (now && before !== now) lines.push(`👑 ${name(now)} takes the lead`);
+    if (now && before !== now) lines.push({ icon: 'crown', text: `${name(now)} takes the lead` });
   }
   return lines;
 }
@@ -183,8 +183,8 @@ export function gameHighlights(game, name) {
     if (!streak || maxRun > streak.n) streak = { id: p.id, n: maxRun };
     if (!accurate || made > accurate.n) accurate = { id: p.id, n: made };
   }
-  if (best && best.s > 0) lines.push(`💰 Biggest round: ${name(best.id)} +${best.s} in round ${best.r}`);
-  if (accurate && accurate.n > 0) lines.push(`🎯 Sharpest bidder: ${name(accurate.id)}, ${accurate.n}/${rounds.length} bids made`);
-  if (streak && streak.n >= 3) lines.push(`🔥 Longest streak: ${name(streak.id)}, ${streak.n} bids in a row`);
+  if (best && best.s > 0) lines.push({ icon: 'up', text: `Biggest round: ${name(best.id)} +${best.s} in round ${best.r}` });
+  if (accurate && accurate.n > 0) lines.push({ icon: 'target', text: `Sharpest bidder: ${name(accurate.id)}, ${accurate.n}/${rounds.length} bids made` });
+  if (streak && streak.n >= 3) lines.push({ icon: 'streak', text: `Longest streak: ${name(streak.id)}, ${streak.n} bids in a row` });
   return lines;
 }

@@ -1,0 +1,3 @@
+Hanken Grotesk, variable (wght 300–900, roman + italic), latin subset.
+Source: Google Fonts (fonts.gstatic.com/s/hankengrotesk/v12), downloaded 12 Oct 2026.
+License: SIL Open Font License 1.1 — https://openfontlicense.org

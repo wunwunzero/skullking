@@ -4,7 +4,18 @@ import {
   autoFillTricks, liveStatus, roundHighlights, gameHighlights, tricksInRound, bidHint,
 } from './scoring.js';
 
-const COLORS = ['#e9c46a', '#5ec8f2', '#ff7b7b', '#7ee08a', '#c79bff', '#ff9f43', '#f78fb3', '#9fb3c8'];
+// Player identity = colour + signal-flag pattern, so it never depends on colour alone.
+const COLORS = ['#1a9bb0', '#e5603e', '#2e9e63', '#6a5acd', '#d99a1e', '#3b82c4', '#a0663a', '#6b7a8c'];
+const FLAG_PATTERNS = [
+  c => `<rect width="18" height="13" fill="${c}"/>`,
+  c => `<rect width="18" height="13" fill="#fff"/><rect width="18" height="6.5" fill="${c}"/>`,
+  c => `<rect width="18" height="13" fill="#fff"/><rect width="9" height="13" fill="${c}"/>`,
+  c => `<rect width="18" height="13" fill="${c}"/><rect x="7.5" width="3" height="13" fill="#fff"/><rect y="5" width="18" height="3" fill="#fff"/>`,
+  c => `<rect width="18" height="13" fill="#fff"/><path d="M0 0h18L0 13Z" fill="${c}"/>`,
+  c => `<rect width="18" height="13" fill="${c}"/><rect x="4.5" y="3.25" width="9" height="6.5" fill="#fff"/>`,
+  c => `<rect width="18" height="13" fill="#fff"/><rect width="18" height="4.33" fill="${c}"/><rect y="8.67" width="18" height="4.33" fill="${c}"/>`,
+  c => `<rect width="18" height="13" fill="#fff"/><rect width="9" height="6.5" fill="${c}"/><rect x="9" y="6.5" width="9" height="6.5" fill="${c}"/>`,
+];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
 const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 
@@ -12,6 +23,9 @@ const $app = document.getElementById('app');
 const $top = document.getElementById('top');
 const $sheet = document.getElementById('sheet');
 const $toast = document.getElementById('toast');
+const $sr = document.getElementById('sr');
+// Polite screen-reader announcements for moments that only animate on screen.
+const announce = msg => { $sr.textContent = ''; setTimeout(() => { $sr.textContent = msg; }, 60); };
 
 const S = {
   store: null, code: null, game: undefined, unsub: null, online: true,
@@ -24,12 +38,19 @@ const S = {
   lastPhaseKey: null, revealAnim: false,
   claimed: null,       // seat this phone has claimed in presence
   nudgeSeen: null,     // last nudge timestamp already handled
+  prevX: {},           // Standings Line marker positions, for the glide after scoring
+  deltaRound: null, deltaUntil: 0, // show round deltas on the Standings Line briefly
+  counted: null,       // round whose "nailed it" count-up already played
 };
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const name = id => S.game?.players?.[id]?.name || '?';
 const color = id => COLORS[(S.game?.players?.[id]?.order ?? 0) % COLORS.length];
 const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
+const icon = (id, cls = '') => `<svg class="ico ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
+const flagFor = order => `<svg class="flag" viewBox="0 0 18 13" aria-hidden="true">${FLAG_PATTERNS[order % 8](COLORS[order % 8])}</svg>`;
+const flag = id => flagFor(S.game?.players?.[id]?.order ?? 0);
+const mark = (cls = 'mark') => `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/></svg>`;
 const me = () => S.actingFor || (S.seat && S.seat !== 'watch' ? S.seat : null);
 
 // ---------- seat memory (sessionStorage first so test tabs can differ) ----------
@@ -61,7 +82,7 @@ function syncPresence(g) {
   if (holder === DEVICE) return;
   if (holder && S.claimed === seat) {
     // Someone took this seat over on another phone.
-    S.seat = null; S.claimed = null;
+    S.seat = null; S.claimed = null; S.sheet = null; S.actingFor = null;
     try { sessionStorage.removeItem(seatKey(S.code)); localStorage.removeItem(seatKey(S.code)); } catch {}
     toast(`${name(seat)} is now playing on another phone`);
     return;
@@ -127,7 +148,8 @@ function route() {
   S.unsub?.(); S.unsub = null;
   S.code = code.length === 4 ? code : null;
   if (S.claimed && S.code) S.store.release(S.code, S.claimed).catch(() => {});
-  S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null; S.claimed = null; S.nudgeSeen = null;
+  S.changing = false;
+  S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null; S.claimed = null; S.nudgeSeen = null; S.prevX = {};
   if (S.code) {
     S.seat = loadSeat(S.code);
     S.unsub = S.store.subscribe(S.code, g => onGame(g));
@@ -143,7 +165,20 @@ function onGame(g) {
   if (g) {
     const key = `${g.round}:${g.phase}`;
     S.revealAnim = !!(prev && prev.phase === 'bidding' && g.phase === 'playing' && prev.round === g.round);
-    if (S.revealAnim) { chime(); navigator.vibrate?.(60); }
+    if (prev && prev.phase === 'results' && (g.phase === 'bidding' || g.phase === 'done') && (g.round !== prev.round || g.phase === 'done')) {
+      S.deltaRound = prev.round; S.deltaUntil = Date.now() + 3400;
+    }
+    if (S.revealAnim) {
+      chime(); navigator.vibrate?.(60);
+      const b = g.bids?.[g.round] || {};
+      announce(`All bids in. ${sortedPlayers(g).map(p => `${p.name} ${b[p.id]}`).join(', ')}.`);
+    }
+    if (S.deltaUntil > Date.now() && S.deltaRound && prev?.phase === 'results') {
+      const t = totals(g), mine = me(), lead = ranking(g)[0];
+      announce(`Round ${S.deltaRound} scored.${mine ? ` You ${signed(t[mine].rounds[S.deltaRound])}.` : ''} ${lead.name} leads with ${lead.total}.`);
+    }
+    S.finalAnim = !!(prev && prev.phase !== 'done' && g.phase === 'done');
+    if (S.finalAnim) chime();
     S.lastPhaseKey = key;
     if (S.seat && S.seat !== 'watch' && !g.players?.[S.seat]) S.seat = null;
     // Rematch started on another phone: follow it, keeping this phone's seat.
@@ -167,7 +202,7 @@ function checkNudge(g) {
     S.nudgeSeen = t;
     if (Date.now() - t < 120000) {
       navigator.vibrate?.([120, 60, 120]); chime();
-      toast(g.phase === 'results' ? '⏰ The crew is waiting for your tricks!' : '⏰ The crew is waiting for your bid!');
+      toast(g.phase === 'results' ? 'The crew is waiting for your tricks' : 'The crew is waiting for your bid');
     }
   }
 }
@@ -180,11 +215,23 @@ function maybeReveal(g) {
 }
 
 function update(patch) {
-  return S.store.update(S.code, patch).catch(err => { console.error(err); toast('Could not save — check connection'); });
+  return S.store.update(S.code, patch).catch(err => {
+    console.error(err);
+    toast("Couldn't save that. Check your connection.", { label: 'Retry', run: () => update(patch) });
+  });
 }
 
 // ---------- render ----------
+// Remember which control had focus so a redraw (ours or a sync from another phone) keeps your place.
+function focusKey() {
+  const a = document.activeElement;
+  if (!a || a === document.body || !a.dataset) return null;
+  const d = a.dataset;
+  return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}` : null;
+}
+
 function render() {
+  const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code);
   renderTop();
   if (!S.code) { $app.innerHTML = S.setup ? setupView() : homeView(); }
@@ -201,7 +248,58 @@ function render() {
     }[g.phase] || lobbyView)(g);
     if (g.phase === 'lobby') drawQR();
   }
-  renderSheet();
+  if (!sheetFocused) renderSheet();
+  afterRender();
+  if (fk) { const el = document.querySelector(fk); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+}
+
+// Glide Standings Line markers from their previous sounding, and count up the "nailed it" score.
+function afterRender() {
+  // Standings Line: assign lanes from the tags' real widths (no overlaps, whatever the names),
+  // then glide every marker from its previous position and lane to the new one.
+  document.querySelectorAll('.standings').forEach(st => {
+    st.classList.add('measuring');
+    const boxes = [...st.querySelectorAll('.marker[data-id]')].map(m => {
+      const r = m.querySelector('.tag').getBoundingClientRect();
+      return { m, l: r.left, r: r.right };
+    }).sort((a, b) => a.l - b.l);
+    const ends = [];
+    for (const b of boxes) {
+      let lane = ends.findIndex(e => b.l - e >= 6);
+      if (lane < 0) { lane = ends.length; ends.push(b.r); } else ends[lane] = b.r;
+      b.lane = lane;
+    }
+    st.querySelector('.lanes').style.setProperty('--lanes', Math.max(1, ends.length));
+    for (const { m, lane } of boxes) {
+      const id = m.dataset.id, x = m.style.getPropertyValue('--x'), before = S.prevX[id];
+      if (before) { m.style.setProperty('--x', before.x); m.style.setProperty('--lane', before.lane); }
+      else m.style.setProperty('--lane', lane);
+      S.prevX[id] = { x, lane };
+      m.dataset.to = JSON.stringify({ x, lane });
+    }
+    st.getBoundingClientRect();
+    st.classList.remove('measuring');
+    for (const { m } of boxes) {
+      const to = JSON.parse(m.dataset.to);
+      m.style.setProperty('--x', to.x); m.style.setProperty('--lane', to.lane);
+    }
+  });
+  const c = document.querySelector('[data-count]');
+  if (c && S.counted !== c.dataset.key) {
+    S.counted = c.dataset.key;
+    const target = +c.dataset.count, t0 = performance.now(), dur = 900;
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const tick = now => {
+      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 4);
+      c.textContent = signed(Math.round(target * e));
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+  // When the round deltas finish fading, redraw once so their space in the tags closes up.
+  if (S.deltaUntil > Date.now() && !S.deltaTimer) {
+    S.deltaTimer = setTimeout(() => { S.deltaTimer = null; S.deltaUntil = 0; render(); }, S.deltaUntil - Date.now() + 50);
+  }
 }
 
 function renderTop() {
@@ -212,25 +310,29 @@ function renderTop() {
   const sub = g.phase === 'lobby' ? 'Waiting to start' : g.phase === 'done' ? 'Game over'
     : `${r} card${r > 1 ? 's' : ''} · ${esc(name(dealerFor(g, r)))} deals`;
   $top.innerHTML = `
-    <span class="dot ${S.online ? '' : 'off'}" title="${S.online ? 'Connected' : 'Offline — changes will sync'}"></span>
-    <button class="icon-btn code" data-act="share" aria-label="Share game code">${esc(S.code)}</button>
-    <div class="round">${g.phase === 'lobby' || g.phase === 'done' ? `<b>${g.phase === 'done' ? 'Final scores' : 'Skull King'}</b>` : `<b>Round ${r} of ${ROUNDS}</b>`}<span>${sub}</span></div>
-    <button class="icon-btn" data-act="scores">Scores</button>
-    <button class="icon-btn" data-act="menu" aria-label="Menu">⋯</button>`;
+    <button class="code-chip ${S.online ? '' : 'offline'}" data-act="share" aria-label="Game ${esc(S.code)}${S.online ? '' : ', offline: changes will sync when you reconnect'}. Invite players"><span class="dot ${S.online ? '' : 'off'}" aria-hidden="true"></span>${esc(S.code)}${S.online ? '' : '<span class="off-label">Offline</span>'}</button>
+    <div class="round">${g.phase === 'lobby' || g.phase === 'done' ? `<b>${g.phase === 'done' ? 'Final scores' : 'Lobby'}</b>` : `<b>Round ${r}<span> / ${ROUNDS}</span></b>`}<small>${sub}</small></div>
+    <button class="icon-btn" data-act="scores" aria-label="Scores table">${icon('chart')}</button>
+    <button class="icon-btn" data-act="menu" aria-label="Menu">${icon('more')}</button>`;
 }
 
 // ---------- home & setup ----------
 function homeView() {
   return `
-  <section class="hero"><div class="skull" aria-hidden="true">☠️</div><h1>Skull King</h1><p>Live scorekeeper for the whole table</p></section>
-  <button class="btn primary" data-act="new">Start a new game</button>
+  <section class="hero">${mark()}<h1>Skull King</h1><p>Live scores for the whole table.</p>
+    <ol class="steps">
+      <li><b>1</b><span>Everyone bids on their own phone</span></li>
+      <li><b>2</b><span>Bids reveal together, like the fist shake</span></li>
+      <li><b>3</b><span>Tap when you win a trick; scoring is automatic</span></li>
+    </ol></section>
+  <button class="btn primary" data-act="new">${icon('plus')} New game</button>
   <div class="card">
     <h3>Join a game</h3>
     <form class="join" data-form="join"><input name="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="Game code" required>
-    <button class="btn primary" style="width:auto">Join</button></form>
+    <button class="btn ink">Join</button></form>
   </div>
-  <button class="btn ghost" data-act="rules">How scoring works</button>
-  ${S.store.live ? '' : `<p class="note">Local mode: games sync between tabs on this device only. Add the Firebase config to play across phones.</p>`}`;
+  <button class="btn ghost" data-act="rules">${icon('book')} How scoring works</button>
+  ${S.store.live ? '' : `<p class="note">Local mode: games sync between tabs on this device only.</p>`}`;
 }
 
 function setupView() {
@@ -241,21 +343,21 @@ function setupView() {
   <form data-form="setup">
     ${names.map((n, i) => `
       <div class="name-row">
-        <span class="num">${i + 1}</span>
+        ${flagFor(i)}
         <input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="Player ${i + 1}" autocomplete="off" data-idx="${i}">
         <button type="button" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">Deals</button>
-        ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="Remove player ${i + 1}">×</button>` : ''}
+        ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="Remove player ${i + 1}">${icon('close')}</button>` : ''}
       </div>`).join('')}
-    ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">+ Add player</button>` : ''}
-    <h3 style="margin-top:20px">House rules</h3>
+    ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} Add player</button>` : ''}
+    <div class="section-h"><h3>House rules</h3></div>
     <div class="seg" role="radiogroup" aria-label="Scoring">
       <button type="button" role="radio" aria-checked="${S.setup.scoring === 'classic'}" class="${S.setup.scoring === 'classic' ? 'on' : ''}" data-act="set-scoring" data-v="classic"><b>Classic</b><span>±20 per trick</span></button>
       <button type="button" role="radio" aria-checked="${S.setup.scoring === 'rascal'}" class="${S.setup.scoring === 'rascal' ? 'on' : ''}" data-act="set-scoring" data-v="rascal"><b>Rascal</b><span>10/card, half if off by 1</span></button>
     </div>
-    <p class="muted small" style="margin:12px 0 6px">Expansion cards in the deck</p>
+    <p class="muted small" style="margin:14px 2px 8px">Expansion cards in the deck</p>
     <div class="toggles">
-      ${[['kraken', '🐙 Kraken'], ['whale', '🐋 White Whale'], ['loot', '💰 Loot']].map(([k, l]) =>
-        `<button type="button" aria-pressed="${!!S.setup.exp[k]}" class="${S.setup.exp[k] ? 'on' : ''}" data-act="toggle-exp" data-k="${k}">${l}</button>`).join('')}
+      ${[['kraken', 'Kraken'], ['whale', 'White Whale'], ['loot', 'Loot']].map(([k, l]) =>
+        `<button type="button" aria-pressed="${!!S.setup.exp[k]}" class="${S.setup.exp[k] ? 'on' : ''}" data-act="toggle-exp" data-k="${k}">${icon(k)}${l}</button>`).join('')}
     </div>
     <button class="btn primary" style="margin-top:20px">Create game</button>
     <button type="button" class="btn ghost" data-act="cancel-setup">Cancel</button>
@@ -283,14 +385,14 @@ async function createGame(names, dealer, opts = {}) {
 function seatView() {
   const ps = sortedPlayers(S.game);
   return `
-  <h2 style="margin-top:16px">Who are you?</h2>
+  <h2 style="margin-top:24px">Who are you?</h2>
   <p class="muted small">Game ${esc(S.code)}. Pick your name to bid from this phone.</p>
   <div class="seat-list">
     ${ps.map(p => {
       const taken = S.game.presence?.[p.id] && S.game.presence[p.id] !== DEVICE;
-      return `<button class="btn ${taken ? 'taken' : ''}" data-act="seat" data-id="${p.id}"><span class="dot" style="background:${color(p.id)}"></span>${esc(p.name)}${taken ? '<span class="chip">📱 on another phone</span>' : ''}</button>`;
+      return `<button class="btn ${taken ? 'taken' : ''}" data-act="seat" data-id="${p.id}">${flag(p.id)}${esc(p.name)}${taken ? `<span class="chip tag">${icon('phone')}On another phone</span>` : ''}</button>`;
     }).join('')}
-    <button class="btn ghost" data-act="seat" data-id="watch">Table screen (big scoreboard, no seat)</button>
+    <button class="btn ghost" data-act="seat" data-id="watch">${icon('screen')} Table screen (big scoreboard, no seat)</button>
   </div>`;
 }
 
@@ -315,16 +417,18 @@ function lobbyView(g) {
   const ps = sortedPlayers(g);
   return `
   <div class="card share">
-    <p class="muted small" style="margin:0">Everyone scan or open the link, then pick their name</p>
+    <p class="muted small" style="margin:0">Scan or open the link, then pick your name</p>
     <div class="big-code">${esc(S.code)}</div>
     <div class="qr" id="qr" aria-label="QR code for the game link"></div>
-    <div class="row-btns"><button class="btn" data-act="copy-link">Copy link</button>${navigator.share ? `<button class="btn" data-act="native-share">Share…</button>` : ''}</div>
+    <div class="row-btns"><button class="btn" data-act="copy-link">${icon('link')} Copy link</button>${navigator.share ? `<button class="btn" data-act="native-share">${icon('share')} Share</button>` : ''}</div>
   </div>
+  <div class="section-h"><h3>Crew</h3><span>${ps.length} players</span></div>
   <div class="board">
-    ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-      <div class="who"><b>${esc(p.name)}${p.id === g.firstDealer ? '<span class="badge">deals first</span>' : ''}</b></div><span></span><span></span></div>`).join('')}
+    ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}">${flag(p.id)}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === g.firstDealer ? '<span class="badge">deals first</span>' : ''}</b></div><span></span><span></span></div>`).join('')}
   </div>
-  <p class="muted small" style="text-align:center">${esc(rulesLine(g))} · <button class="link" data-act="rules" style="min-height:0;padding:0">rules</button></p>
+  <p class="rules-line">${esc(rulesLine(g))}</p>
+  <button class="btn ghost" data-act="rules">${icon('book')} Rules &amp; scoring</button>
   <button class="btn primary" style="margin-top:8px" data-act="start">Start round 1</button>`;
 }
 
@@ -341,92 +445,179 @@ function drawQR() {
   qrLoading.then(() => { if (document.getElementById('qr')) { drawQR(); } }).catch(() => { el.hidden = true; });
 }
 
-// ---------- bidding ----------
+// ---------- the Standings Line ----------
+const niceStep = raw => [10, 20, 25, 50, 100, 200, 250, 500, 1000].find(v => v >= raw) || 1000;
+
+function standingsLine(g) {
+  const t = totals(g), ps = sortedPlayers(g);
+  if (!ps.length) return '';
+  const vals = ps.map(p => t[p.id].total);
+  const minV = Math.min(0, ...vals), maxV = Math.max(0, ...vals);
+  const step = niceStep(Math.max(maxV - minV, 40) / 4);
+  const lo = Math.floor(minV / step) * step, hi = Math.max(lo + step * 2, Math.ceil(maxV / step) * step);
+  const pos = v => ((v - lo) / (hi - lo)) * 100;
+  const top = Math.max(...vals), scored = g.round > 1 || g.phase === 'done';
+  const showDelta = S.deltaUntil > Date.now() && S.deltaRound;
+  const elapsed = showDelta ? 3400 - (S.deltaUntil - Date.now()) : 0;
+  // Stack markers on lanes so tags never overlap. On phones, cap at two lanes by
+  // dropping names from the tags (flag + sounding only) when the crew is crowded.
+  const lay = gap => {
+    const ends = [];
+    const placed = [...ps].sort((a, b) => t[a.id].total - t[b.id].total).map(p => {
+      const x = pos(t[p.id].total);
+      let lane = ends.findIndex(end => x - end >= gap);
+      if (lane < 0) { lane = ends.length; ends.push(x); } else ends[lane] = x;
+      return { p, x, lane };
+    });
+    return { placed, lanes: ends.length };
+  };
+  // Tags are wider while round deltas show, so they need more room on the line.
+  const gap = showDelta ? 48 : 34;
+  let compact = false, L = lay(gap);
+  if (L.lanes > 3 && S.seat !== 'watch') { compact = true; L = lay(gap / 2); }
+  let ticks = '';
+  for (let v = lo; v <= hi; v += step) ticks += `<span class="tick ${v === 0 ? 'zero' : ''}" style="left:${pos(v)}%">${v}</span>`;
+  // Depth bands: shoal water at the low end, open water toward the leader.
+  const bands = [1, 2, 3].map(i => `<span class="band b${i}" style="left:${((i - 1) / 3) * 100}%"></span>`).join('');
+  const markers = L.placed.map(({ p, x, lane }) => {
+    const lead = scored && t[p.id].total === top && top > 0;
+    const d = showDelta ? t[p.id].rounds[S.deltaRound] : null;
+    const edge = x < 12 ? 'edge-l' : x > 88 ? 'edge-r' : '';
+    return `<div class="marker ${p.id === me() ? 'me' : ''} ${lead ? 'lead' : ''} ${edge}" data-id="${p.id}" style="--x:${x.toFixed(2)}%;--lane:${lane}">
+      <span class="stem"></span>
+      <span class="tag">${lead ? icon('crown', 'crown') : ''}${flag(p.id)}${compact ? '' : esc(p.name.slice(0, 8)) + ' '}<b>${signed(t[p.id].total)}</b>
+        ${d != null ? `<span class="delta ${d >= 0 ? 'good-t' : 'bad-t'}" style="animation-delay:-${elapsed}ms">${signed(d)}</span>` : ''}</span></div>`;
+  }).join('');
+  return `<div class="standings ${compact ? 'compact' : ''}" role="img" aria-label="Standings: ${esc(ranking(g).map(r => `${r.name} ${r.total}`).join(', '))}">
+    <div class="lanes" style="--lanes:${L.lanes}">${bands}${markers}</div><div class="scale">${ticks}</div></div>`;
+}
+
+// Round-scored card: your result first (the "nailed it" moment), then everyone's round.
 function lastRoundBanner(g) {
   const r = g.round - 1;
-  if (r < 1 || g.phase !== 'bidding' || (g.bids?.[g.round] && Object.keys(g.bids[g.round]).length)) return undoCard(g);
+  if (r < 1 || g.phase !== 'bidding' || (g.bids?.[g.round] && Object.keys(g.bids[g.round]).length)) return '';
+  const t = totals(g), mine = me();
   const lines = roundHighlights(g, r, name);
-  const t = totals(g);
-  const rows = sortedPlayers(g).map(p => `${esc(p.name)} <b class="${t[p.id].rounds[r] >= 0 ? 'good-t' : 'bad-t'}">${signed(t[p.id].rounds[r])}</b>`).join(' · ');
-  return `<div class="card gold"><h3>Round ${r} scored</h3><p class="small" style="margin:0 0 8px">${rows}</p>
-    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
+  const myScore = mine ? t[mine].rounds[r] : null;
+  const myBid = mine ? g.bids?.[r]?.[mine] : null, myTricks = mine ? g.results?.[r]?.[mine]?.tricks : null;
+  const nailed = mine && myBid != null && myBid === myTricks;
+  const outcome = !mine ? '' : `<div class="outcome">${icon(nailed ? 'crown' : 'target', 'crownmark')}
+      <div class="what">${nailed ? (myBid === 0 ? 'Zero bid nailed' : 'Bid nailed') : `Missed by ${Math.abs((myTricks ?? 0) - (myBid ?? 0))}`}
+        <small>Bid ${myBid ?? '–'} · won ${myTricks ?? '–'}${g.cannon?.[r]?.[mine] ? ' · Cannonball' : ''}</small></div>
+      <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span></div>`;
+  const rows = sortedPlayers(g).filter(p => p.id !== mine).map(p =>
+    `<span>${flag(p.id)}${esc(p.name)} <b class="${t[p.id].rounds[r] >= 0 ? 'good-t' : 'bad-t'}">${signed(t[p.id].rounds[r])}</b></span>`).join('');
+  return `<div class="card scored ${mine ? (nailed ? 'nailed' : myScore < 0 || (g.scoring === 'rascal' && myScore === 0) ? 'missed' : '') : ''}">
+    ${mine ? '' : `<h3>Round ${r} scored</h3>`}${outcome}
+    ${rows ? `<div class="round-row">${mine ? `<span>Round ${r}:</span>` : ''}${rows}</div>` : ''}
+    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}
     ${undoCard(g)}</div>`;
 }
 function undoCard(g) {
   const u = lastUndo(g);
-  return u ? `<button class="link" data-act="undo">${esc(u.label)}</button>` : '';
+  return u ? `<button class="link" data-act="undo">${icon('undo', 'sm')}${esc(u.label.replace(/^[↶←]\s*/, ''))}</button>` : '';
 }
 
 function biddingView(g) {
   const r = g.round, bids = g.bids?.[r] || {}, mine = me();
   const ps = sortedPlayers(g);
-  const t = totals(g);
   const waiting = ps.filter(p => bids[p.id] == null).length;
   const cannon = !!g.cannon?.[r]?.[mine];
-  return `
-  ${lastRoundBanner(g)}
-  ${mine ? `<div class="card ${bids[mine] == null ? 'gold' : ''}">
+  const locked = mine && bids[mine] != null && !S.changing;
+  const teach = g.scoring === 'rascal'
+    ? 'Your bid is how many tricks you think you’ll win this round.'
+    : `Your bid is how many tricks you think you’ll win. Exactly right: +20 each (zero bid: +${10 * r}). Off: −10 per trick.`;
+  const card = !mine ? '' : locked ? `<div class="card locked-card">
+      <div class="locked-row">${icon('check', 'big-check')}<div><h3 style="margin:0">Bid is in</h3>
+        <p class="muted small" style="margin:2px 0 0">Hidden until everyone has bid${g.scoring === 'rascal' ? (cannon ? ' · Cannonball' : ' · Grapeshot') : ''}.</p></div></div>
+      <div class="row-btns"><button class="btn peek" data-act="noop" data-peek="${bids[mine]}" aria-label="Hold to peek at your bid">Hold to peek</button>
+        <button class="btn" data-act="change-bid">Change</button></div></div>`
+    : `<div class="card action">
     <h3>${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} bid · ${r} card${r > 1 ? 's' : ''}</h3>
-    <p class="muted small" style="margin:0">${bids[mine] == null ? 'Shake your fist, then tap your bid. It stays hidden until everyone has bid.' : `Locked in: <b>${bids[mine]}</b>${g.scoring === 'rascal' ? (cannon ? ' 💣 Cannonball' : ' · Grapeshot') : ''}. You can change it until the last bid is in.`}</p>
-    <div class="bid-grid">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}">${n}</button>`).join('')}</div>
-    ${g.scoring === 'rascal' ? `<div class="seg" style="margin-top:10px" role="radiogroup" aria-label="Rascal wager">
-      <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>Grapeshot</b><span>${10 * r} pts · half if off by 1</span></button>
-      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>💣 Cannonball</b><span>${15 * r} pts · all or nothing</span></button>
+    <p class="muted small" style="margin:0">${teach} <button class="link inline" data-act="rules">How scoring works</button></p>
+    <div class="bid-grid">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}">${n}</button>`).join('')}</div>
+    ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="Rascal wager">
+      <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}Grapeshot</b><span>${10 * r} pts · half if off by 1</span></button>
+      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>${icon('cannon', 'sm')}Cannonball</b><span>${15 * r} pts · all or nothing</span></button>
     </div>` : ''}
-  </div>` : ''}
-  <h3 style="margin-top:20px">${waiting ? `Waiting for ${waiting}…` : 'Revealing…'}</h3>
-  <div class="board">
-    ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-      <div class="who"><b>${esc(p.name)}${roleBadges(g, r, p.id)}</b><span>${signed(t[p.id].total)} pts</span></div>
-      ${bids[p.id] != null ? '<span class="chip good">✓ locked</span>' : nudgeChip(p.id, mine)}
-      <span></span></div>`).join('')}
   </div>`;
+  return `
+  ${standingsLine(g)}
+  ${lastRoundBanner(g)}
+  ${card}
+  <div class="section-h"><h3>${waiting ? `Waiting for ${waiting}` : 'Revealing'}</h3><span>${ps.length - waiting} of ${ps.length} in</span></div>
+  <div class="board" style="--cols:${tableCols(ps.length)}">
+    ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}">${flag(p.id)}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${roleBadges(g, r, p.id)}</b></div>
+      ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}In</span>` : nudgeChip(p.id, mine)}
+      <span></span></div>`).join('')}${tableFill(ps.length)}
+  </div>`;
+}
+
+// Table screen: balanced columns for the crew grid, plus filler cells so every rule lines up.
+function tableCols(n) { return n <= 4 ? 2 : n <= 6 ? 3 : 4; }
+function tableFill(n) {
+  if (S.seat !== 'watch') return '';
+  const c = tableCols(n), rem = n % c;
+  return rem ? '<div class="prow fill" aria-hidden="true"></div>'.repeat(c - rem) : '';
 }
 
 // "thinking…" chip that buzzes that player's phone when tapped.
 function nudgeChip(pid, mine) {
-  if (pid === mine || S.seat === pid) return '<span class="chip">thinking…</span>';
-  return `<button class="chip nudge" data-act="nudge" data-id="${pid}" aria-label="Nudge ${esc(name(pid))}">thinking… 🔔</button>`;
+  if (pid === mine || S.seat === pid) return '<span class="chip">Your bid</span>';
+  return `<button class="chip nudge" data-act="nudge" data-id="${pid}" aria-label="Nudge ${esc(name(pid))}">${icon('bell')}Nudge</button>`;
 }
 
 // ---------- playing ----------
 function boardRows(g, r, { showLive }) {
   const bids = g.bids?.[r] || {}, live = g.live?.[r] || {}, t = totals(g), mine = me();
-  return sortedPlayers(g).map(p => {
+  return sortedPlayers(g).map((p, i) => {
     const bid = bids[p.id], got = live[p.id] || 0, st = liveStatus(bid, got);
     const chip = !showLive ? '' : {
-      need: `<span class="chip">${got}/${bid}</span>`, on: `<span class="chip good">${got}/${bid} ✓</span>`,
-      bust: `<span class="chip bad">${got}/${bid} ✗</span>`, safe0: `<span class="chip gold">0 bid · safe</span>`,
-      bust0: `<span class="chip bad">0 bid · ${got} ✗</span>`, none: '',
+      need: `<span class="chip">${got} of ${bid}</span>`,
+      on: `<span class="chip good">${icon('check')}${got} of ${bid}</span>`,
+      bust: `<span class="chip bad">${icon('x')}${got} of ${bid}</span>`,
+      safe0: `<span class="chip sk">Zero · safe so far</span>`,
+      bust0: `<span class="chip bad">${icon('x')}Zero · ${got} won</span>`, none: '',
     }[st];
-    return `<div class="prow ${p.id === mine ? 'me' : ''} ${S.revealAnim ? 'reveal' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-      <div class="who"><b>${esc(p.name)}${roleBadges(g, r, p.id)}</b><span>bid <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ' 💣' : ''}</span></div>
+    return `<div class="prow ${p.id === mine ? 'me' : ''}">${flag(p.id)}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${roleBadges(g, r, p.id)}</b><span>Bid <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></div>
       ${chip}<span class="total">${signed(t[p.id].total)}</span></div>`;
-  }).join('');
+  }).join('') + tableFill(sortedPlayers(g).length);
 }
 
 function playingView(g) {
-  const r = g.round, live = g.live?.[r] || {}, mine = me();
+  const r = g.round, live = g.live?.[r] || {}, bids = g.bids?.[r] || {}, mine = me(), ps = sortedPlayers(g);
   const destroyed = g.destroyed?.[r] || 0;
   const played = Object.values(live).reduce((a, b) => a + b, 0) + destroyed;
   const done = played >= r;
   const canDestroy = g.expansions?.kraken || g.expansions?.whale;
+  const watch = S.seat === 'watch' && !S.actingFor;
   const hint = bidHint(g, r);
+  const myGot = mine ? live[mine] || 0 : 0, myBid = mine ? bids[mine] : null;
+  // The reveal: every bid flips up at once, then stays as the round's reference strip.
+  const strip = `<div class="bids-strip ${S.revealAnim ? 'reveal' : ''}" aria-label="Bids this round">
+    ${ps.map((p, i) => `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name.slice(0, 7))}</small></span>`).join('')}
+  </div>`;
   return `
-  <div class="card">
-    <div class="progress"><span class="muted">Tricks played</span><b>${played} / ${r}</b></div>
-    ${hint ? `<p class="small hint">${esc(hint)}</p>` : ''}
-    ${mine ? `<div class="counter">
-      <button class="btn minus" data-act="live" data-d="-1" ${(live[mine] || 0) <= 0 ? 'disabled' : ''} aria-label="Remove a trick">−1</button>
-      <button class="btn primary plus" data-act="live" data-d="1" ${done ? 'disabled' : ''}>${S.actingFor ? esc(name(mine)) : 'I'} won a trick</button>
+  ${standingsLine(g)}
+  <div class="card ${mine && !done ? 'action' : ''} play-card">
+    ${strip}
+    ${hint ? `<p class="verdict ${played === 0 ? 'loud' : ''}">${icon(hint.icon, played === 0 ? '' : 'sm')}<span>${esc(hint.text)}</span></p>` : ''}
+    ${mine ? `<div class="mine-line"><span class="muted">${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} tricks</span>
+      <b>${myGot}<span> of ${myBid ?? '–'}</span></b></div>
+    <div class="counter">
+      <button class="btn minus" data-act="live" data-d="-1" ${myGot <= 0 ? 'disabled' : ''} aria-label="Remove a trick">${icon('minus')}</button>
+      <button class="btn primary plus" data-act="live" data-d="1" ${done ? 'disabled' : ''}>${icon('plus')}${S.actingFor ? esc(name(mine)) : 'I'} won a trick</button>
     </div>` : ''}
-    ${canDestroy ? `<div class="destroy"><span class="small muted">🐙 Tricks destroyed: <b>${destroyed}</b></span>
-      <span><button class="icon-btn" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer destroyed trick">−</button>
-      <button class="icon-btn" data-act="destroy" data-d="1" ${done || destroyed >= 2 ? 'disabled' : ''}>+ Destroyed</button></span></div>` : ''}
+    <p class="table-line small muted">Table: <b class="sounding">${played}</b> of ${r} trick${r > 1 ? 's' : ''} played · ${esc(name(leaderFor(g, r)))} leads every trick</p>
   </div>
-  <div class="board">${boardRows(g, r, { showLive: true })}</div>
-  <button class="btn ${done ? 'primary' : ''}" style="margin-top:16px" data-act="to-results">${done ? 'Round over — check results' : 'Round over'}</button>
-  <button class="link" data-act="fix-bids">Fix a bid</button>`;
+  ${canDestroy && !watch ? `<div class="card quiet destroy"><span class="small">${icon('kraken', 'sm')}Destroyed by Kraken / White Whale: <b class="sounding">${destroyed}</b></span>
+    <span><button class="icon-btn outline" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer destroyed trick">${icon('minus')}</button>
+    <button class="icon-btn outline" data-act="destroy" data-d="1" ${done || destroyed >= 2 ? 'disabled' : ''}>${icon('plus')}Destroyed</button></span></div>` : ''}
+  <div class="board" style="--cols:${tableCols(ps.length)}">${boardRows(g, r, { showLive: true })}</div>
+  ${watch ? '' : `<button class="btn ${done ? 'primary' : ''}" style="margin-top:16px" data-act="to-results">${done ? 'Round over: check results' : 'Round over'}</button>
+  <button class="link" data-act="fix-bids">Fix a bid</button>`}`;
 }
 
 // ---------- results ----------
@@ -469,8 +660,8 @@ function effectiveResults(g, r) {
 function stepper(act, key, label, hint, val, max) {
   const plain = esc(label.replace(/<[^>]+>/g, '').trim());
   return `<div class="stepper"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>
-    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="Less ${plain}">−</button>
-    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="More ${plain}">+</button></div></div>`;
+    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="Less ${plain}">${icon('minus')}</button>
+    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="More ${plain}">${icon('plus')}</button></div></div>`;
 }
 
 function resultForm(g, r, pid) {
@@ -482,10 +673,11 @@ function resultForm(g, r, pid) {
   return `
     ${stepper('draft', 'tricks', 'Tricks won', `Bid ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
     ${open ? keys.map(k => stepper('draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, BONUS[k].hint, d[k] || 0, BONUS[k].max)).join('')
-      : `<button class="link" data-act="open-bonus">Add bonus cards (14s, captures${g.expansions?.loot ? ', loot' : ''})</button>`}
+      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}Add bonus points (14s you won, specials you captured${g.expansions?.loot ? ', Loot' : ''})</button>`}
     ${open && !made ? `<p class="small muted" style="margin:4px 0 0">${g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.'}</p>` : ''}
     <div class="preview"><span class="muted">This round</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
-    <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? 'Confirmed ✓' : 'Confirm'}</button>`;
+    <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? `${icon('check')}Confirmed` : 'Confirm'}</button>
+    ${confirmed ? '' : `<p class="small muted" style="margin:8px 2px 0">No bonuses? You can skip this: your trick count is already in.</p>`}`;
 }
 
 function resultsView(g) {
@@ -493,61 +685,79 @@ function resultsView(g) {
   const n = tricksInRound(g, r), destroyed = g.destroyed?.[r] || 0;
   const allIn = ps.every(p => eff[p.id]);
   const sum = ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0);
-  const t = totals(g);
+  const inCount = ps.filter(p => eff[p.id]).length;
+  const t = totals(g), watch = S.seat === 'watch' && !S.actingFor;
+  const myPending = mine && (!g.results?.[r]?.[mine] || S.drafts[`${r}:${mine}`]);
+  // Score is the table's action: quiet while your own card still needs you, magenta once the counts reconcile.
+  const ready = allIn && sum === n;
+  const status = !allIn ? `${inCount} of ${ps.length} in · waiting on ${ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ')}`
+    : sum === n ? `${ps.length} of ${ps.length} in · tricks add up` : `${ps.length} of ${ps.length} in · tricks don't add up`;
+  const srcLabel = e => !e ? 'waiting' : e.src === 'confirmed' ? 'confirmed' : e.src === 'live' ? 'counted' : 'worked out';
   return `
-  ${mine ? `<div class="card gold"><h3>${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} round ${r}</h3>${resultForm(g, r, mine)}</div>` : ''}
-  <h3 style="margin-top:20px">Round ${r} results</h3>
-  <div class="board">
+  ${standingsLine(g)}
+  ${mine ? `<div class="card ${myPending ? 'action' : ''}"><h3>${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} round ${r}</h3>${resultForm(g, r, mine)}</div>` : ''}
+  <div class="section-h"><h3>Round ${r} results</h3><span>${ps.filter(p => eff[p.id]?.src === 'confirmed').length} confirmed</span></div>
+  <div class="board" style="--cols:${tableCols(ps.length)}">
     ${ps.map(p => {
       const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? scoreFor(g, r, p.id, e) : null;
-      const src = !e ? 'not entered' : e.src === 'confirmed' ? 'confirmed ✓' : e.src === 'live' ? 'from live count' : 'auto-filled';
-      return `<div class="prow ${p.id === mine ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-        <div class="who"><b>${esc(p.name)}</b><span>bid ${bid ?? '–'}${g.cannon?.[r]?.[p.id] ? ' 💣' : ''} · won ${e ? e.tricks : '–'} · ${src}</span></div>
-        ${e ? `<span class="chip ${s >= 0 ? 'good' : 'bad'}">${signed(s)}</span>` : nudgeChip(p.id, mine).replace('thinking…', 'waiting')}
+      const made = e && bid === e.tricks;
+      return `<div class="prow ${p.id === mine ? 'me' : ''}">${flag(p.id)}
+        <div class="who"><b><span class="nm">${esc(p.name)}</span></b><span>Bid <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · won <b>${e ? e.tricks : '–'}</b> · ${srcLabel(e)}</span></div>
+        ${e ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : nudgeChip(p.id, mine)}
         <span class="total">${signed(t[p.id].total + (s || 0))}</span></div>`;
-    }).join('')}
+    }).join('')}${tableFill(ps.length)}
   </div>
-  ${g.expansions?.kraken || g.expansions?.whale ? `<div class="destroy card" style="margin-top:12px"><span class="small">🐙 Tricks destroyed by Kraken / White Whale: <b>${destroyed}</b></span>
-    <span><button class="icon-btn" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer">−</button>
-    <button class="icon-btn" data-act="destroy" data-d="1" ${destroyed >= 2 ? 'disabled' : ''} aria-label="One more">+</button></span></div>` : ''}
-  ${allIn && sum !== n ? `<div class="warnbox">Tricks add up to ${sum}, but this round had ${n} to win${destroyed ? ` (${r} minus ${destroyed} destroyed)` : ''}. Someone's count is off.</div>` : ''}
-  ${!allIn ? `<div class="warnbox">Waiting on tricks from ${ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ')}.</div>` : ''}
-  <button class="btn primary" style="margin-top:12px" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? 'Score anyway' : r === ROUNDS ? 'Score final round' : `Score round ${r}`}</button>
-  <p class="small muted">Anyone without bonus cards can skip confirming — their live count is used.</p>
-  ${undoCard(g)}`;
+  ${(g.expansions?.kraken || g.expansions?.whale) && !watch ? `<div class="card quiet destroy"><span class="small">${icon('kraken', 'sm')}Destroyed by Kraken / White Whale: <b class="sounding">${destroyed}</b></span>
+    <span><button class="icon-btn outline" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer destroyed trick">${icon('minus')}</button>
+    <button class="icon-btn outline" data-act="destroy" data-d="1" ${destroyed >= 2 ? 'disabled' : ''}>${icon('plus')}Destroyed</button></span></div>` : ''}
+  ${allIn && sum !== n ? `<div class="warnbox">${icon('x')}<span>The tricks add up to ${sum}, but ${n} ${n === 1 ? 'was' : 'were'} won this round${destroyed ? ` (${r} played, ${destroyed} destroyed)` : ''}. Check the "won" numbers above; tap a player's chip in Scores to fix it later.</span></div>` : ''}
+  ${watch ? '' : `<p class="status-line ${ready ? 'ok' : ''}">${icon(ready ? 'check' : 'bell', 'sm')}<span>${status}</span></p>
+  <button class="btn ${ready && !myPending ? 'primary' : ''}" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? 'Score anyway' : r === ROUNDS ? 'Score final round' : `Score round ${r}`}</button>
+  ${undoCard(g)}`}`;
 }
 
 // ---------- done ----------
+// Each player's line gets its own dash pattern and ends on their flag, so it never relies on colour.
+const DASHES = ['', '7 4', '2 4', '10 3 2 3', '4 3', '12 4', '1 3', '6 2 2 2'];
 function chartSVG(g) {
   const t = totals(g), ps = sortedPlayers(g), n = ROUNDS;
   const vals = ps.flatMap(p => [0, ...t[p.id].running]);
   const lo = Math.min(0, ...vals), hi = Math.max(10, ...vals);
-  const W = 340, H = 200, L = 34, R = 8, T = 10, B = 22;
+  const W = 340, H = 200, L = 34, R = 24, T = 12, B = 22;
   const x = i => L + (i / n) * (W - L - R), y = v => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
   const step = Math.max(50, Math.ceil((hi - lo) / 4 / 50) * 50);
   let grid = '';
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) grid += `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
   for (let i = 1; i <= n; i++) grid += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${i}</text>`;
   const lines = ps.map(p => {
-    const pts = [0, ...t[p.id].running].map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    return `<polyline points="${pts}" fill="none" stroke="${color(p.id)}" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>`;
+    const o = p.order % 8, run = [0, ...t[p.id].running];
+    const pts = run.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const ex = x(run.length - 1), ey = y(run[run.length - 1]);
+    return `<polyline points="${pts}" fill="none" stroke="${COLORS[o]}" stroke-width="2.25" stroke-dasharray="${DASHES[o]}" stroke-linejoin="round" stroke-linecap="round"/>
+      <svg x="${(ex + 4).toFixed(1)}" y="${(ey - 5).toFixed(1)}" width="14" height="10" viewBox="0 0 18 13">${FLAG_PATTERNS[o](COLORS[o])}</svg>`;
   }).join('');
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Running totals by round">${grid}${lines}</svg>
-    <div class="legend">${ps.map(p => `<span style="--c:${color(p.id)}">${esc(p.name)}</span>`).join('')}</div>`;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Running totals by round: ${esc(ranking(g).map(r => `${r.name} ${r.total}`).join(', '))}">${grid}${lines}</svg>
+    <div class="legend">${ps.map(p => `<span><svg class="dash" viewBox="0 0 24 4" aria-hidden="true"><line x1="1" y1="2" x2="23" y2="2" stroke="${COLORS[p.order % 8]}" stroke-width="2.25" stroke-dasharray="${DASHES[p.order % 8]}" stroke-linecap="round"/></svg>${flag(p.id)}${esc(p.name)}</span>`).join('')}</div>`;
 }
 
 function doneView(g) {
   const rank = ranking(g), lines = gameHighlights(g, name);
-  const winners = rank.filter(r => r.place === 1).map(r => esc(r.name)).join(' & ');
+  const tops = rank.filter(r => r.place === 1);
+  const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}<svg class="flag" viewBox="0 0 18 13" aria-hidden="true">${FLAG_PATTERNS[g.players[r.id].order % 8](COLORS[g.players[r.id].order % 8])}</svg></span>`).join('');
   return `
-  <section class="hero" style="padding:16px 0 4px"><div class="skull">🏴‍☠️</div><h1 style="font-size:2.4rem">${winners} win${rank.filter(r => r.place === 1).length > 1 ? '' : 's'}!</h1></section>
-  <div class="board podium">
-    ${rank.map(r => `<div class="prow"><span class="place">${r.place}</span><div class="who"><b>${esc(r.name)}</b></div><span></span><span class="total">${signed(r.total)}</span></div>`).join('')}
+  <section class="winner ${S.finalAnim ? 'arrive' : ''}">
+    <div class="hero-flags">${hero}</div>
+    <h1>${tops.map(r => esc(r.name)).join(' & ')} win${tops.length > 1 ? '' : 's'}</h1>
+    <p class="final-total"><b data-count="${tops[0].total}" data-key="${S.code}:final">${signed(tops[0].total)}</b> after 10 rounds · ${esc(rulesLine(g))}</p>
+  </section>
+  ${standingsLine(g)}
+  <div class="board podium" style="margin-top:8px">
+    ${rank.map(r => `<div class="prow ${r.id === S.seat ? 'me' : ''}"><span class="place">${r.place}</span>${flag(r.id)}<div class="who"><b><span class="nm">${esc(r.name)}</span>${r.place === 1 ? icon('crown', 'sm') : ''}</b></div><span class="total">${signed(r.total)}</span></div>`).join('')}
   </div>
-  ${lines.length ? `<div class="card"><h3>Hall of fame</h3><ul class="hl">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul></div>` : ''}
+  ${lines.length ? `<div class="card"><h3>Hall of fame</h3><ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul></div>` : ''}
   <div class="card"><h3>The voyage</h3>${chartSVG(g)}</div>
-  <button class="btn" data-act="scores">Round-by-round table</button>
   <button class="btn primary" data-act="rematch">Rematch, same crew</button>
+  <button class="btn" data-act="scores">${icon('chart')} Round-by-round table</button>
   <button class="btn ghost" data-act="home">Home</button>
   ${undoCard(g)}`;
 }
@@ -555,12 +765,20 @@ function doneView(g) {
 // ---------- sheets ----------
 function renderSheet() {
   const s = S.sheet;
-  if (!s || (s.kind !== 'rules' && !S.game)) { $sheet.hidden = true; $sheet.innerHTML = ''; return; }
+  if (!s || (s.kind !== 'rules' && !S.game)) {
+    const wasOpen = !$sheet.hidden;
+    $sheet.hidden = true; $sheet.innerHTML = '';
+    if (wasOpen && S.opener?.isConnected) S.opener.focus({ preventScroll: true });
+    S.opener = null;
+    return;
+  }
   const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet }[s.kind]?.(s) || '';
   const title = { scores: 'Scores', menu: 'Menu', rules: 'Rules & scoring', edit: s.bidOnly ? 'Fix a bid' : `Edit round ${s.r}`, actfor: 'Enter for…', share: `Game ${S.code}`, bidpick: 'Fix whose bid?' }[s.kind];
   $sheet.hidden = false;
-  $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2>${esc(title)}</h2><button class="icon-btn" data-act="close">Close</button></div>${body}</div>`;
+  const opening = $sheet.hidden;
+  $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2 tabindex="-1">${esc(title)}</h2><button class="icon-btn outline" data-act="close" aria-label="Close">${icon('close')}</button></div>${body}</div>`;
   if (s.kind === 'share') drawQR();
+  if (opening) { S.opener = document.activeElement; $sheet.querySelector('h2')?.focus(); }
 }
 
 function scoresSheet() {
@@ -576,7 +794,7 @@ function scoresSheet() {
     }).join('')}</tr>`;
   }
   return `<p class="small muted" style="margin-top:0">Cells show score and bid/won. Tap a scored round to fix it.</p>
-  <div class="tbl-wrap"><table class="scores"><thead><tr><th>#</th>${ps.map(p => `<th style="color:${color(p.id)}">${esc(p.name)}</th>`).join('')}</tr></thead>
+  <div class="tbl-wrap"><table class="scores"><thead><tr><th>#</th>${ps.map(p => `<th>${flag(p.id)}${esc(p.name)}</th>`).join('')}</tr></thead>
   <tbody>${rows}</tbody><tfoot><tr><td></td>${ps.map(p => `<td>${signed(t[p.id].total)}</td>`).join('')}</tr></tfoot></table></div>`;
 }
 
@@ -586,11 +804,11 @@ function editSheet(s) {
   const bid = s.bid ?? g.bids?.[s.r]?.[s.id] ?? 0;
   const cannon = s.cannon ?? !!g.cannon?.[s.r]?.[s.id];
   const score = roundScore(s.r, bid, d, { mode: g.scoring, cannon });
-  return `<p style="margin-top:0"><b style="color:${color(s.id)}">${esc(name(s.id))}</b></p>
+  return `<p style="margin-top:0;display:flex;gap:8px;align-items:center">${flag(s.id)}<b>${esc(name(s.id))}</b></p>
     ${stepper('edit-bid', 'bid', 'Bid', '', bid, s.r)}
     ${g.scoring === 'rascal' ? `<div class="seg" style="margin:6px 0" role="radiogroup" aria-label="Rascal wager">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="edit-cannon" data-v="0"><b>Grapeshot</b></button>
-      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="edit-cannon" data-v="1"><b>💣 Cannonball</b></button></div>` : ''}
+      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="edit-cannon" data-v="1"><b>${icon('cannon', 'sm')}Cannonball</b></button></div>` : ''}
     ${stepper('edit-draft', 'tricks', 'Tricks won', '', d.tricks ?? 0, s.r)}
     ${bonusKeys(g).map(k => stepper('edit-draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, '', d[k] || 0, BONUS[k].max)).join('')}
     <div class="preview"><span class="muted">Round ${s.r}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${signed(score ?? 0)}</b></div>
@@ -598,28 +816,28 @@ function editSheet(s) {
 }
 
 function menuSheet() {
-  const g = S.game;
-  return `<div class="seat-list">
-    <button class="btn" data-act="open-actfor">Enter for another player…</button>
-    <button class="btn" data-act="share">Invite players (code &amp; QR)</button>
-    <button class="btn" data-act="rules">Rules &amp; scoring</button>
-    ${lastUndo(g) ? `<button class="btn" data-act="undo">${esc(lastUndo(g).label)}</button>` : ''}
-    <button class="btn" data-act="change-seat">Switch player on this phone</button>
-    ${S.seat !== 'watch' ? `<button class="btn" data-act="table-mode">Use this screen as the table scoreboard</button>` : ''}
-    <button class="btn ghost" data-act="home">Leave game (it keeps going)</button>
+  const g = S.game, u = lastUndo(g);
+  return `<div class="menu-list">
+    <button data-act="open-actfor">${icon('users')}Enter for another player</button>
+    <button data-act="share">${icon('share')}Invite players (code &amp; QR)</button>
+    <button data-act="rules">${icon('book')}Rules &amp; scoring</button>
+    ${u ? `<button data-act="undo">${icon('undo')}${esc(u.label.replace(/^[↶←]\s*/, ''))}</button>` : ''}
+    <button data-act="change-seat">${icon('swap')}Switch player on this phone</button>
+    ${S.seat !== 'watch' ? `<button data-act="table-mode">${icon('screen')}Use as the table scoreboard</button>` : ''}
+    <button data-act="home">${icon('exit')}Leave game (it keeps going)</button>
   </div>
-  <p class="small muted">You are ${S.seat === 'watch' ? 'the table screen' : `<b>${esc(name(S.seat))}</b>`}. ${esc(rulesLine(g))}. ${S.store.live ? 'Live sync on.' : 'Local mode: this device only.'}</p>`;
+  <p class="small muted" style="margin:12px 2px 0">You are ${S.seat === 'watch' ? 'the table screen' : `<b>${esc(name(S.seat))}</b>`}. ${esc(rulesLine(g))}. ${S.store.live ? 'Live sync on.' : 'Local mode: this device only.'}</p>`;
 }
 
 function actForSheet() {
   return `<p class="small muted" style="margin-top:0">For when someone's phone is dead or away. Your screen will act as them until you tap Done.</p>
   <div class="seat-list">${sortedPlayers(S.game).filter(p => p.id !== S.seat).map(p =>
-    `<button class="btn" data-act="act-as" data-id="${p.id}"><span class="dot" style="background:${color(p.id)}"></span>${esc(p.name)}</button>`).join('')}</div>`;
+    `<button class="btn" data-act="act-as" data-id="${p.id}">${flag(p.id)}${esc(p.name)}</button>`).join('')}</div>`;
 }
 
 function shareSheet() {
   return `<div class="share"><div class="big-code">${esc(S.code)}</div><div class="qr" id="qr"></div>
-    <div class="row-btns"><button class="btn" data-act="copy-link">Copy link</button>${navigator.share ? `<button class="btn" data-act="native-share">Share…</button>` : ''}</div></div>`;
+    <div class="row-btns"><button class="btn" data-act="copy-link">${icon('link')} Copy link</button>${navigator.share ? `<button class="btn" data-act="native-share">${icon('share')} Share</button>` : ''}</div></div>`;
 }
 
 function rulesSheet() {
@@ -632,7 +850,7 @@ function rulesSheet() {
     <tr><td>Bid 0 and take no tricks</td><td>+10 × round</td></tr>
     <tr><td>Bid 0 and take any trick</td><td>−10 × round</td></tr>
   </table>
-  <h3>Bonus points <span class="small muted">(only if your bid is made)</span></h3>
+  <h3>Bonus points <span>only if your bid is made</span></h3>
   <table>
     <tr><td>Each yellow, purple or green 14 in your tricks</td><td>+10</td></tr>
     <tr><td>Black 14 in your tricks</td><td>+20</td></tr>
@@ -651,18 +869,18 @@ function rulesSheet() {
     <li>Tigress: when you play it, announce Pirate or Escape.</li>
     <li>If an Escape or special card leads, the next numbered card played sets the suit.</li>
   </ul>
-  <h3>Rascal scoring <span class="small muted">(optional)</span></h3>
+  <h3>Rascal scoring <span>optional</span></h3>
   <ul>
     <li>Every round is worth 10 points per card dealt, whatever you bid.</li>
     <li>Hit your bid: all of it plus bonuses. Off by one: half of everything. Off by more: nothing.</li>
-    <li>💣 Cannonball: reveal it with your bid. 15 points per card if exact, nothing otherwise.</li>
+    <li>Cannonball: reveal it with your bid. 15 points per card if exact, nothing otherwise.</li>
   </ul>
-  <h3>Expansion cards <span class="small muted">(optional)</span></h3>
+  <h3>Expansion cards <span>optional</span></h3>
   <ul>
-    <li>🐙 Kraken: the trick is destroyed and nobody wins it. Whoever would have won leads next.</li>
-    <li>🐋 White Whale: special cards lose their power; the highest number wins, any suit. If only special cards were played, the trick is destroyed and the Whale's player leads.</li>
+    <li>Kraken: the trick is destroyed and nobody wins it. Whoever would have won leads next.</li>
+    <li>White Whale: special cards lose their power; the highest number wins, any suit. If only special cards were played, the trick is destroyed and the Whale's player leads.</li>
     <li>If both the Kraken and the White Whale land in one trick, the second one played counts.</li>
-    <li>💰 Loot: plays like an Escape. Whoever wins the trick forms an alliance with the Loot's player: if both make their bids, each gets +20.</li>
+    <li>Loot: plays like an Escape. Whoever wins the trick forms an alliance with the Loot's player: if both make their bids, each gets +20.</li>
   </ul>
   <h3>Rounds</h3>
   <p class="muted" style="margin-top:0">10 rounds; round N deals N cards. The deal passes left each round. House rule: the player after the dealer leads every trick of the round.</p>
@@ -706,7 +924,7 @@ const actions = {
   },
   nudge(el) {
     update({ [`nudge/${el.dataset.id}`]: Date.now() });
-    toast(`Nudged ${name(el.dataset.id)} 🔔`);
+    toast(`Nudged ${name(el.dataset.id)}`);
   },
   cannon(el) {
     const g = S.game, who = me();
@@ -724,9 +942,12 @@ const actions = {
   async 'copy-link'() { try { await navigator.clipboard.writeText(shareURL()); toast('Link copied'); } catch { toast(shareURL()); } },
   'native-share'() { navigator.share({ title: 'Skull King', text: `Join our Skull King game: ${S.code}`, url: shareURL() }).catch(() => {}); },
   start() { update({ phase: 'bidding', round: 1 }); },
+  noop() {},
+  'change-bid'() { S.changing = true; render(); document.querySelector('[data-act="bid"].on')?.focus(); },
   bid(el) {
     const g = S.game, r = g.round, who = me();
     if (g.phase !== 'bidding' || !who) return;
+    S.changing = false;
     update({ [`bids/${r}/${who}`]: +el.dataset.n });
     navigator.vibrate?.(15);
   },
@@ -770,6 +991,7 @@ const actions = {
     withHistory(g, patch, `↶ Undo scoring round ${r}`);
     S.drafts = {};
     update(patch);
+    toast(`Round ${r} scored`, { label: 'Undo', run: () => actions.undo() });
   },
   undo() {
     const u = lastUndo(S.game);
@@ -820,14 +1042,14 @@ const actions = {
 // "Fix a bid" during play: pick a player, then a bid-only edit sheet.
 function bidPickSheet() {
   const g = S.game;
-  return `<div class="seat-list">${sortedPlayers(g).map(p => `<button class="btn" data-act="fix-pick" data-id="${p.id}"><span class="dot" style="background:${color(p.id)}"></span>${esc(p.name)} · bid ${g.bids?.[g.round]?.[p.id] ?? '–'}</button>`).join('')}</div>`;
+  return `<div class="seat-list">${sortedPlayers(g).map(p => `<button class="btn" data-act="fix-pick" data-id="${p.id}">${flag(p.id)}${esc(p.name)}<span class="chip tag">Bid ${g.bids?.[g.round]?.[p.id] ?? '–'}</span></button>`).join('')}</div>`;
 }
 
 // The edit sheet hides tricks/bonuses for bid-only fixes.
 function editSheetWrapper(s) {
   if (!s.bidOnly) return editSheet(s);
   const bid = s.bid ?? S.game.bids?.[s.r]?.[s.id] ?? 0;
-  return `<p style="margin-top:0"><b style="color:${color(s.id)}">${esc(name(s.id))}</b>, round ${s.r}</p>
+  return `<p style="margin-top:0;display:flex;gap:8px;align-items:center">${flag(s.id)}<b>${esc(name(s.id))}</b> · round ${s.r}</p>
     ${stepper('edit-bid', 'bid', 'Bid', '', bid, s.r)}
     <button class="btn primary" style="margin-top:12px" data-act="save-edit">Save bid</button>`;
 }
@@ -844,7 +1066,24 @@ document.addEventListener('click', e => {
   if (fn) { e.preventDefault(); fn(el); }
 });
 $sheet.addEventListener('click', e => { if (e.target === $sheet) actions.close(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && S.sheet) actions.close(); });
+// Hold to peek at your own hidden bid; it hides again the moment you let go.
+const peekOn = e => { const b = e.target.closest('.peek'); if (b) { b.textContent = `Your bid: ${b.dataset.peek}`; b.classList.add('on'); } };
+const peekOff = () => document.querySelectorAll('.peek.on').forEach(b => { b.textContent = 'Hold to peek'; b.classList.remove('on'); });
+document.addEventListener('pointerdown', peekOn);
+['pointerup', 'pointercancel', 'pointerleave', 'blur'].forEach(t => document.addEventListener(t, peekOff, true));
+document.addEventListener('keydown', e => { if ((e.key === ' ' || e.key === 'Enter') && e.target.closest?.('.peek')) { e.preventDefault(); peekOn(e); } });
+document.addEventListener('keyup', e => { if (e.target.closest?.('.peek')) peekOff(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && S.sheet) actions.close();
+  if (e.key === 'Tab' && !$sheet.hidden) {
+    const f = [...$sheet.querySelectorAll('button:not([disabled]), input, [tabindex="0"]')];
+    if (!f.length) return;
+    const first = f[0], last = f[f.length - 1];
+    if (!$sheet.contains(document.activeElement)) { e.preventDefault(); first.focus(); }
+    else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
 
 document.addEventListener('submit', async e => {
   e.preventDefault();
