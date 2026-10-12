@@ -133,3 +133,13 @@ test('bid hints', () => {
   assert.match(bidHint({ bids: { 5: { a: 1, b: 2 } } }, 5).text, /2 spare tricks/);
   assert.match(bidHint({ bids: { 5: { a: 2, b: 3 } } }, 5).text, /exactly 5/);
 });
+
+import { playerSummary, plain } from '../scoring.js';
+
+test('player summary and plain totals', () => {
+  const done = { ...game, phase: 'done', round: 3 };
+  assert.deepEqual(playerSummary(done, 'a'), { place: 3, total: 40, best: { score: 30, round: 3 }, made: 2, played: 3 });
+  assert.equal(plain(60), '60');
+  assert.equal(plain(-10), '−10');
+  assert.equal(plain(0), '0');
+});

@@ -1,6 +1,6 @@
 // App shell: network-first (always fresh when online, cached when not).
 // Versioned third-party files (Firebase SDK, fonts, QR lib): cache-first, so the app opens with weak signal.
-const CACHE = 'sk-v9';
+const CACHE = 'sk-v10';
 const ASSETS = ['./', './index.html', './fonts/hanken-grotesk.woff2', './fonts/hanken-grotesk-italic.woff2', './app.js', './store.js', './scoring.js', './avatars.js', './firebase-config.js', './styles.css', './manifest.webmanifest', './icon.svg', './icon-192.png', './apple-touch-icon.png'];
 const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
 const VENDOR = [FB + 'firebase-app.js', FB + 'firebase-auth.js', FB + 'firebase-database.js'];

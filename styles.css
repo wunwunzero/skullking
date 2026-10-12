@@ -32,8 +32,12 @@
   --bad: #b3222c;
   --hatch: rgba(179, 34, 44, .14);
   --shadow: 0 1px 2px rgba(14, 27, 44, .06), 0 8px 24px -12px rgba(14, 27, 44, .18);
-  --radius: 14px;
+  --radius: 18px;
   --hair: 1px;
+  --water-1: var(--tint-2);
+  --water-2: var(--tint);
+  --tile-ground: #ffffff;
+  --tile-mix: 24%;
   --tap: 52px;
   --pad: 16px;
   --ease: cubic-bezier(.16, 1, .3, 1);
@@ -60,6 +64,11 @@
     --bad: #ff7a72;
     --hatch: rgba(255, 122, 114, .16);
     --shadow: 0 1px 2px rgba(0, 0, 0, .45), 0 10px 30px -14px rgba(0, 0, 0, .75);
+    /* Water on a wooden deck: cool slate-teal steps, so depth still reads after dark. */
+    --water-1: #1f3a3d;
+    --water-2: #182a2b;
+    --tile-ground: #1c1917;
+    --tile-mix: 46%;
     color-scheme: dark;
   }
 }
@@ -135,8 +144,8 @@ body.table #top { padding-inline: max(var(--pad), calc((100% - 1100px) / 2 + var
 /* ---------- buttons ---------- */
 .btn {
   display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: var(--tap);
-  border-radius: 12px; border: var(--hair) solid var(--line-strong); background: var(--surface); color: var(--ink);
-  font-weight: 650; padding: 10px 16px; text-decoration: none; transition: background .15s, transform .1s;
+  border-radius: 14px; border: var(--hair) solid var(--line-strong); background: var(--surface); color: var(--ink);
+  font-weight: 700; padding: 10px 16px; text-decoration: none; transition: background .15s, transform .1s;
 }
 .btn:hover { background: var(--tint); }
 .btn:active { transform: scale(.985); }
@@ -446,8 +455,8 @@ button.chip.nudge::after { content: ''; position: absolute; inset: -6px -4px; }
 /* depth bands: a water field behind the markers. Shoal tint at the low end, open (deep) water toward
    the leader, chart-style dashed contours between, and italic water lettering naming the ends. */
 .standings .band { position: absolute; bottom: 0; top: 0; width: 33.34%; border-left: var(--hair) dashed var(--line-strong); z-index: 0; }
-.standings .band.b1 { background: var(--tint-2); border-left: 0; }
-.standings .band.b2 { background: var(--tint); }
+.standings .band.b1 { background: var(--water-1); border-left: 0; }
+.standings .band.b2 { background: var(--water-2); }
 .standings .band.b3 { background: transparent; }
 .standings .water-label { position: absolute; top: 4px; font-size: .75rem; font-style: italic; letter-spacing: .04em; color: var(--ink-2); z-index: 0; }
 .standings .water-label.shoal { left: 6px; }
@@ -512,7 +521,7 @@ body.table .standings .water-label { font-size: .95rem; top: 6px; }
 
 /* ---------- crew characters ---------- */
 .ava { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 7px; box-shadow: none;
-  background: color-mix(in srgb, var(--crew) 24%, #ffffff); flex: none; }
+  background: color-mix(in srgb, var(--crew) var(--tile-mix), var(--tile-ground)); flex: none; }
 .ava .sprite { width: 84%; height: 84%; image-rendering: pixelated; }
 .prow .ava { width: 30px; height: 30px; }
 .prow { grid-template-columns: 30px 1fr auto auto; }
@@ -548,3 +557,63 @@ body.table .bid-cell .ava { width: 40px; height: 40px; }
 .crew-pick:disabled .ava { filter: grayscale(1); opacity: .45; }
 .crew-pick:disabled b { color: var(--ink-3); }
 .crew-pick { min-width: 0; } .crew-pick b { overflow-wrap: anywhere; }
+
+/* ---------- critique #2 round: clarity, a11y, looser chart ---------- */
+.ico.xs { width: 12px; height: 12px; stroke-width: 2.4; vertical-align: -1px; }
+.badge.lead { display: inline-flex; align-items: center; gap: 3px; }
+h2.t3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; letter-spacing: -.02em; }
+.section-h h2.t3 { margin: 0; }
+.rules h2.t3 { margin-top: 18px; display: flex; align-items: center; gap: 8px; }
+.rules h2.t3 span { font-weight: 500; color: var(--ink-3); font-size: .85rem; }
+
+/* Chunky, pressable game pieces: a heavier bottom edge rather than a shadow. */
+.btn.primary { border-bottom: 3px solid color-mix(in srgb, var(--magenta) 70%, #000); }
+.bid-grid button { border-radius: 14px; border-bottom-width: 3px; border-bottom-color: var(--line-strong); min-height: 62px; }
+.bid-grid button.on { border-bottom-color: color-mix(in srgb, var(--magenta) 70%, #000); }
+.bid-grid button:active, .btn.primary:active { transform: translateY(2px); border-bottom-width: 1px; }
+.card { border-radius: var(--radius); }
+.chip { padding: 5px 11px; }
+.marker .tag { border-radius: 999px; padding: 3px 10px 3px 4px; }
+.marker .tag .ava { border-radius: 50%; }
+
+/* A soft wash of each player's crew colour on their row; magenta still marks you. */
+.prow { background: linear-gradient(90deg, color-mix(in srgb, var(--crew, transparent) 10%, transparent), transparent 60%); }
+.prow.me { background: var(--magenta-tint); box-shadow: inset 0 0 0 var(--hair) color-mix(in srgb, var(--magenta) 40%, transparent); }
+.prow .ava { width: 34px; height: 34px; border-radius: 10px; }
+.prow { grid-template-columns: 34px 1fr auto auto; }
+.podium .prow { grid-template-columns: 26px 34px 1fr auto; }
+
+/* Results: status + Score stay in thumb reach */
+.dock { position: sticky; bottom: 0; z-index: 3; margin: 16px calc(-1 * var(--pad)) 0; padding: 4px var(--pad) calc(12px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-top: var(--hair) solid var(--line); }
+.dock .status-line { margin: 8px 2px; }
+.link span { text-align: left; }
+.link { align-items: flex-start; }
+
+/* Dealer choice as one radio group */
+.name-row .deal { display: inline-flex; align-items: center; gap: 4px; min-width: 44px; justify-content: center; }
+.radio-dot { width: 16px; height: 16px; border-radius: 50%; border: 1.5px solid var(--line-strong); display: block; }
+
+/* Character picker: equal cards, chips for taken/locked, champion's reward first */
+.crew-pick { align-content: start; }
+.crew-art { position: relative; display: block; }
+.crew-chip { position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); white-space: nowrap; max-width: 90px; overflow: hidden; text-overflow: ellipsis;
+  font-size: .7rem; font-weight: 700; padding: 1px 6px; border-radius: 999px; background: var(--ink); color: var(--bg); display: inline-flex; align-items: center; gap: 3px; }
+.crew-chip.claim { background: var(--brass-fill); color: #1d1404; }
+.crew-pick b { margin-top: 6px; }
+.crew-pick.reward { border-color: var(--brass-fill); grid-column: span 2; }
+.crew-pick.reward .ava.big { width: 64px; height: 64px; }
+
+/* Final: a line for every player */
+.card.personal { display: flex; align-items: center; gap: 12px; }
+.card.personal .ava, .card.personal .flag { width: 40px; height: 40px; border-radius: 10px; }
+.card.personal b { display: block; font-size: 1.05rem; }
+.card.personal span { font-size: .88rem; color: var(--ink-2); }
+
+/* Home: the crew parade */
+.parade { display: flex; gap: 8px; margin-top: 18px; }
+.parade .ava { width: 40px; height: 40px; border-radius: 11px; animation: bob 2.6s ease-in-out infinite; animation-delay: calc(var(--i) * -.37s); }
+@keyframes bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-4px); } }
+.standings.compact { --lane-h: 32px; --lane-n: 32; }
+.standings.compact .lanes { padding-top: 14px; }
+.standings.compact .water-label { top: 2px; }

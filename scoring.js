@@ -188,3 +188,19 @@ export function gameHighlights(game, name) {
   if (streak && streak.n >= 3) lines.push({ icon: 'streak', text: `Longest streak: ${name(streak.id)}, ${streak.n} bids in a row` });
   return lines;
 }
+
+// One player's end-of-game story: place, best round and how many bids they hit exactly.
+export function playerSummary(game, pid) {
+  const t = totals(game), rounds = scoredRounds(game);
+  const place = ranking(game).find(r => r.id === pid)?.place;
+  let best = null, made = 0;
+  for (const r of rounds) {
+    const s = t[pid].rounds[r];
+    if (best === null || s > best.score) best = { score: s, round: r };
+    if (game.results?.[r]?.[pid]?.tricks === game.bids?.[r]?.[pid]) made++;
+  }
+  return { place, total: t[pid].total, best, made, played: rounds.length };
+}
+
+// Totals read as plain numbers (60, −10); only round changes carry a + sign.
+export const plain = n => (n < 0 ? '−' : '') + Math.abs(n);
