@@ -35,6 +35,8 @@ colors:
   night-made-green: "#6fcf97"
   night-miss-red: "#ff7a72"
   night-miss-hatch: "rgba(255, 122, 114, .16)"
+  night-water-1: "#1f3a3d"
+  night-water-2: "#182a2b"
   crew-captain: "#d6453d"
   crew-deckhand: "#3b82c4"
   crew-gunner: "#2e9e63"
@@ -44,6 +46,16 @@ colors:
   crew-kraken: "#a0663a"
   crew-whale: "#6b8299"
   crew-crab: "#e0a526"
+  crew-cook: "#7d8f2e"
+  crew-first-mate: "#3f4aa8"
+  crew-lookout: "#4fb3d9"
+  crew-lady-captain: "#c46aa0"
+  crew-tigress: "#ea6a1f"
+  crew-escape-flag: "#8c96a3"
+  crew-loot-chest: "#23967f"
+  crew-ghost-pirate: "#3f8f8a"
+  crew-skeleton: "#8a8270"
+  crew-sea-witch: "#8e44ad"
   crew-skull-king: "#7a1f2a"
   flag-teal: "#1a9bb0"
   flag-vermilion: "#e5603e"
@@ -109,8 +121,10 @@ rounded:
   badge: "6px"
   tag: "8px"
   cell: "10px"
+  tile-row: "10px"
   control: "12px"
-  card: "14px"
+  piece: "14px"
+  card: "18px"
   sheet: "20px"
   pill: "999px"
 spacing:
@@ -129,7 +143,7 @@ components:
     backgroundColor: "{colors.chart-magenta}"
     textColor: "{colors.on-magenta}"
     typography: "{typography.label}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.piece}"
     padding: "10px 16px"
     height: "52px"
   button-primary-hover:
@@ -137,7 +151,7 @@ components:
   button-secondary:
     backgroundColor: "{colors.chart-paper-surface}"
     textColor: "{colors.chart-ink}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.piece}"
     padding: "10px 16px"
     height: "52px"
   button-secondary-hover:
@@ -145,13 +159,13 @@ components:
   button-ink:
     backgroundColor: "{colors.chart-ink}"
     textColor: "{colors.chart-paper}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.piece}"
     padding: "10px 16px"
     height: "52px"
   button-ghost:
     backgroundColor: "transparent"
     textColor: "{colors.chart-ink-2}"
-    rounded: "{rounded.control}"
+    rounded: "{rounded.piece}"
     padding: "10px 16px"
   input-text:
     backgroundColor: "{colors.chart-paper-surface}"
@@ -172,7 +186,7 @@ components:
     textColor: "{colors.chart-ink-2}"
     typography: "{typography.label}"
     rounded: "{rounded.pill}"
-    padding: "4px 10px"
+    padding: "5px 11px"
   chip-lock:
     backgroundColor: "{colors.chart-ink}"
     textColor: "{colors.chart-paper}"
@@ -181,8 +195,8 @@ components:
   bid-key:
     backgroundColor: "{colors.shoal-tint}"
     textColor: "{colors.chart-ink}"
-    rounded: "{rounded.control}"
-    height: "58px"
+    rounded: "{rounded.piece}"
+    height: "62px"
   bid-key-selected:
     backgroundColor: "{colors.chart-magenta}"
     textColor: "{colors.on-magenta}"
@@ -192,11 +206,34 @@ components:
     height: "60px"
   crew-row-me:
     backgroundColor: "{colors.chart-magenta-wash}"
+  results-dock:
+    backgroundColor: "color-mix(in srgb, #f6f8fa 92%, transparent)"
+    padding: "4px 16px 12px"
+  personal-line:
+    backgroundColor: "{colors.chart-paper-surface}"
+    rounded: "{rounded.card}"
+    padding: "16px"
+  peek-on:
+    backgroundColor: "{colors.chart-ink}"
+    textColor: "{colors.chart-paper}"
+    rounded: "{rounded.piece}"
+    height: "52px"
+  dealer-radio:
+    textColor: "{colors.chart-ink-2}"
+    rounded: "{rounded.cell}"
+    padding: "0 12px"
+    height: "44px"
+  dealer-radio-on:
+    backgroundColor: "{colors.chart-ink}"
+    textColor: "{colors.chart-paper}"
+  radio-dot:
+    rounded: "{rounded.pill}"
+    size: "16px"
   standings-tag:
     backgroundColor: "{colors.chart-paper-surface}"
     textColor: "{colors.chart-ink}"
-    rounded: "{rounded.tag}"
-    padding: "3px 8px 3px 5px"
+    rounded: "{rounded.pill}"
+    padding: "3px 10px 3px 4px"
   code-chip:
     backgroundColor: "{colors.chart-paper-surface}"
     textColor: "{colors.chart-ink}"
@@ -207,21 +244,43 @@ components:
     backgroundColor: "color-mix(in srgb, var(--crew) 24%, #ffffff)"
     rounded: "{rounded.tile}"
     size: "26px"
+  crew-tile-night:
+    backgroundColor: "color-mix(in srgb, var(--crew) 46%, #1c1917)"
   crew-tile-small:
     rounded: "{rounded.tile-sm}"
     size: "20px"
+  crew-tile-tag:
+    rounded: "{rounded.pill}"
+    size: "20px"
+  crew-tile-row:
+    rounded: "{rounded.tile-row}"
+    size: "34px"
+  crew-tile-parade:
+    rounded: "{rounded.tile-row}"
+    size: "40px"
   crew-tile-big:
-    rounded: "{rounded.card}"
+    rounded: "{rounded.control}"
+    size: "54px"
+  crew-tile-reward:
+    rounded: "{rounded.control}"
     size: "64px"
   crew-pick:
     backgroundColor: "{colors.chart-paper-surface}"
     textColor: "{colors.chart-ink}"
-    rounded: "{rounded.card}"
+    rounded: "{rounded.piece}"
     padding: "12px 6px 10px"
   crew-pick-hover:
     backgroundColor: "{colors.shoal-tint}"
   crew-pick-selected:
     backgroundColor: "{colors.chart-magenta-wash}"
+  crew-chip:
+    backgroundColor: "{colors.chart-ink}"
+    textColor: "{colors.chart-paper}"
+    rounded: "{rounded.pill}"
+    padding: "1px 6px"
+  crew-chip-claim:
+    backgroundColor: "{colors.brass-fill}"
+    textColor: "#1d1404"
 ---
 
 # Design System: Skull King Scorer
@@ -230,41 +289,45 @@ components:
 
 **Creative North Star: "The Admiralty Chart"**
 
-The scorer reads like a nautical chart laid on the game table. Scores are soundings: italic, tabular numerals set into a quiet field of paper and shoal tint. The leader sits in the deepest water. By day the chart is printed on cool chart-paper white with navy ink; after dark it switches with the system setting to **Tarred Wood**, a ship's deck at night: warm brown-black grounds, pale warm ink and a brighter magenta, so the same chart holds in a dim living room, a café and daylight.
+The scorer reads like a nautical chart laid on the game table. Scores are soundings: italic, tabular numerals set into a quiet field of paper and shoal tint. The leader sits in the deepest water. By day the chart is printed on cool chart-paper white with navy ink; after dark it switches with the system setting to **Tarred Wood**, a ship's deck at night: warm brown-black grounds, pale warm ink, a brighter magenta and cool slate-teal water, so the same chart holds in a dim living room, a café and daylight.
 
-Structure comes from hairlines and tint fills, not from shadows or ornament. Every rule is one device pixel. Surfaces are white panels or shoal-blue fills (warm wood tints after dark) separated by those hairlines, and the only colour that speaks is chart magenta, which on a real chart marks what the navigator must act on. Here it means "you" and "your move". Brass appears only where someone has won: a crown, a nailed bid, the final winner. The pirate world shows up in small touches (a crowned-skull mark, "shallows" and "deep water" lettered on the Standings Line, and a crew of pixel-art characters as player marks), never as parchment, treasure-map gold or costume type.
+Structure comes from hairlines and tint fills, not from shadows or ornament. Every rule is one device pixel. Surfaces are white panels or shoal-blue fills (warm wood tints after dark) separated by those hairlines, and the only colour that speaks is chart magenta, which on a real chart marks what the navigator must act on. Here it means "you" and "your move". Brass appears only where someone has won: the leader's crown, a nailed bid, the final winner. The pirate world shows up in small touches (a crowned-skull mark, "shallows" and "deep water" lettered on the Standings Line, and a crew of twenty pixel-art characters as player marks), never as parchment, treasure-map gold or costume type.
+
+The chart is loose and a little chunky rather than drafting-table tight: generous 18px card corners, pill-shaped markers with round avatars, game pieces (the primary button and bid keys) with a heavier bottom edge that collapses when pressed, and each player's crew colour washing softly into their row.
 
 The world rejects two things, both named in the direction contract: the pirate-parchment costume (gold on navy, treasure-map texture) and the anonymous grey scorer with one accent colour. Density is calm and phone-first: one 560px column of 52px tap targets, with a 1100px table-screen mode for a tablet or TV in the middle of the table.
 
 **Key Characteristics:**
 - Chart-paper white by day and Tarred Wood brown-black after dark, following `prefers-color-scheme`.
 - One-device-pixel hairlines (`--hair`: 1px, .5px at 2dppx) for every structural line.
-- Italic tabular "soundings" for every score, bid, count and delta.
-- Chart magenta only for "you" and "action needed"; brass only for crowns and winners.
+- Italic tabular "soundings" for every score, bid, count and delta; totals unsigned, round changes signed.
+- Chart magenta only for "you" and "action needed"; brass only for the leader, winners and the nailed bid.
 - Hits and misses never rely on colour alone: misses carry a diagonal hatch and an × mark, and players are pixel-art crew characters with their own silhouette as well as a colour (signal flags stand in until a player picks).
+- Pressable game pieces with a collapsing bottom edge, not lifted cards.
 - The Standings Line, a depth-banded scale where crew markers glide between soundings, is the signature component.
 
 ## Colors
 
-A near-monochrome chart palette, navy ink on cool paper by day and warm ink on tarred wood after dark, with two reserved signal colours, ten crew colours for player identity and eight fallback flag colours.
+A near-monochrome chart palette, navy ink on cool paper by day and warm ink on tarred wood after dark, with two reserved signal colours, twenty crew colours for player identity and eight fallback flag colours.
 
 ### Primary
-- **Chart Magenta** (`chart-magenta`; night: `night-magenta`): the colour that means "you" or "act now". It marks the primary button, the selected bid key, the edge of your action card, your Standings Line marker, stem and tag, your bid cell, the "entering for" bar, focus rings, the text caret and selection. Its washes (`chart-magenta-wash`, or a 7-12% `color-mix` into the surface) tint your own crew row and your tag. Text placed on magenta uses `on-magenta`, which is white by day and a near-black wine colour at night, where the magenta itself is brighter.
+- **Chart Magenta** (`chart-magenta`; night: `night-magenta`): the colour that means "you" or "act now". It marks the primary button, the selected bid key, the edge of your action card, your Standings Line marker, stem and tag, your bid cell, the ring on your crew row, the "entering for" bar, focus rings, the text caret and selection. Its washes (`chart-magenta-wash`, or a 7-12% `color-mix` into the surface) tint your own crew row and your tag. Text placed on magenta uses `on-magenta`, which is white by day and a near-black wine colour at night, where the magenta itself is brighter.
 
 ### Secondary
-- **Admiralty Brass** (`brass`, with `brass-fill` for strokes; night: `night-brass`): used only for winning. It appears on the crown over the leading marker, the crown in the logo mark, the border, crown and big score of a nailed-bid card, the podium winner's place (1.3rem) and total, the final total, and the crown above the final winner's flag.
+- **Admiralty Brass** (`brass`, with `brass-fill` for strokes and fills; night: `night-brass`): used only for winning. It appears on the crown over the leading marker, the crown in the logo mark, the border and big score of a nailed-bid card, the podium winner's place (1.3rem) and total, the final total, the crown above the final winner's tile, and the champion's reward card in the picker (brass-fill edge and "Claim" chip).
 
 ### Tertiary
-- **Made Green** (`made-green` / `night-made-green`) and **Miss Red** (`miss-red` / `night-miss-red`): status inks for hit and miss, used on chip outlines, delta soundings and the connection dot. Miss Red always appears together with **Miss Hatch** (`miss-hatch` / `night-miss-hatch`), a -45° stripe fill on bust chips and warning boxes.
-- **Crew colours** (`crew-captain`, `crew-deckhand`, `crew-gunner`, `crew-parrot-pete`, `crew-coralia`, `crew-pearl`, `crew-kraken`, `crew-whale`, `crew-crab`, `crew-skull-king`): one per character (`CREW` in `avatars.js`), always paired with that character's silhouette. A crew colour paints the character's main pixels, tints its tile (24% into white) and draws its line on the end-of-game chart. It is used nowhere else.
+- **Made Green** (`made-green` / `night-made-green`) and **Miss Red** (`miss-red` / `night-miss-red`): status inks for hit and miss, used on chip outlines, delta soundings, the ready status line and the connection dot. Miss Red always appears together with **Miss Hatch** (`miss-hatch` / `night-miss-hatch`), a -45° stripe fill on bust chips and warning boxes.
+- **Crew colours** (`crew-captain`, `crew-deckhand`, `crew-gunner`, `crew-parrot-pete`, `crew-coralia`, `crew-pearl`, `crew-kraken`, `crew-whale`, `crew-crab`, `crew-cook`, `crew-first-mate`, `crew-lookout`, `crew-lady-captain`, `crew-tigress`, `crew-escape-flag`, `crew-loot-chest`, `crew-ghost-pirate`, `crew-skeleton`, `crew-sea-witch`, `crew-skull-king`): one per character (`CREW` in `avatars.js`; First Mate's id is `quartermaster`), always paired with that character's silhouette. A crew colour paints the character's main pixels, tints its tile ground, washes 10% into the left of that player's crew row and draws its line on the end-of-game chart. It is used nowhere else.
 - **Signal-flag colours** (`flag-teal`, `flag-vermilion`, `flag-green`, `flag-violet`, `flag-saffron`, `flag-blue`, `flag-umber`, `flag-slate`): the fallback mark for a player who has not picked a character yet. One per seat, by join order, always paired with that seat's flag pattern. They are used nowhere else.
 
 ### Neutral
-- **Chart Paper / Tarred Wood** (`chart-paper` / `tarred-wood`): the page ground, the sticky header's frosted backing (88% mix), the sheet panel and the dark `theme-color`.
-- **Paper Surface / Wood Surface** (`chart-paper-surface` / `tarred-wood-surface`): cards, the crew board, Standings Line tags, inputs, secondary buttons and crew-picker cards.
-- **Shoal Tint and Deep Shoal Tint** (`shoal-tint`, `shoal-tint-deep`; night: `tarred-wood-tint`, `tarred-wood-tint-deep`): fills for quiet cards, bid keys, stepper buttons, chips, bid cells, hover states, the selected segment and the "leads" badge. They also fill the Standings Line's depth bands, with the deep tint for the shallows and the plain tint for the middle water.
-- **Chart Ink, Ink 2, Ink 3** (`chart-ink`, `chart-ink-2`, `chart-ink-3`; night equivalents): primary text, secondary text and metadata, and tertiary text (tick labels, round numbers, "/ 10"). Chart Ink also serves as a solid fill for the ink button, the toast, the "In" lock chip and toggled-on states.
-- **Hairline and Strong Hairline** (`hairline`, `hairline-strong`; night equivalents): ink at 13% and 26% (night: warm pale ink at 12% and 25%). The light hairline divides rows and outlines cards; the strong hairline draws the depth scale, ticks, stems, tag outlines, badges, the flag ring and control borders.
+- **Chart Paper / Tarred Wood** (`chart-paper` / `tarred-wood`): the page ground, the sticky header's frosted backing (88% mix), the results dock's backing (92% mix), the sheet panel and the dark `theme-color`.
+- **Paper Surface / Wood Surface** (`chart-paper-surface` / `tarred-wood-surface`): cards, the crew board, Standings Line tags, inputs, secondary buttons and crew-picker cards. It is also the crew tile ground: a tile mixes its crew colour 24% into white by day and 46% into the wood surface at night (`--tile-mix` into `--tile-ground`), so tiles stay pastel in daylight and stop glaring after dark.
+- **Shoal Tint and Deep Shoal Tint** (`shoal-tint`, `shoal-tint-deep`; night: `tarred-wood-tint`, `tarred-wood-tint-deep`): fills for quiet cards, bid keys, stepper buttons, chips, bid cells, hover states, the selected segment and the "leads tricks" badge.
+- **Water** (`--water-1`, `--water-2`): the Standings Line's shallows and middle-water bands. By day they reuse Deep Shoal Tint and Shoal Tint; at night they switch to a cool slate-teal pair (`night-water-1`, `night-water-2`) laid over the tarred wood, so the depth steps still read in the dark.
+- **Chart Ink, Ink 2, Ink 3** (`chart-ink`, `chart-ink-2`, `chart-ink-3`; night equivalents): primary text, secondary text and metadata, and tertiary text (tick labels, round numbers, "/ 10"). Chart Ink also serves as a solid fill for the ink button, the toast, the "In" lock chip, the peeked bid, the selected dealer, crew-picker owner chips and toggled-on states.
+- **Hairline and Strong Hairline** (`hairline`, `hairline-strong`; night equivalents): ink at 13% and 26% (night: warm pale ink at 12% and 25%). The light hairline divides rows and outlines cards; the strong hairline draws the depth scale, ticks, stems, tag outlines, badges, the flag ring, control borders and the resting edge of bid keys.
 
 ### Named Rules
 **The Magenta Means You Rule.** Chart magenta marks only the current player and the action they need to take. It is never decorative, never used for a heading, and never applied to another player's data.
@@ -284,14 +347,16 @@ A near-monochrome chart palette, navy ink on cool paper by day and warm ink on t
 ### Hierarchy
 - **Display** (800, clamp(2.6rem, 12vw, 3.8rem), 1.15, -.045em): the home hero title. The final screen's winner line uses a smaller variant (800, clamp(2.2rem, 10vw, 3.2rem), -.04em).
 - **Headline** (750, 1.6rem, 1.15, -.02em): screen headings; sheet headings drop to 1.35rem.
-- **Title** (700, 1.05rem, 1.15): card and section headings; the header's "Round N" line is 750 at 1.05rem.
+- **Title** (700, 1.05rem, 1.15, -.02em): card and section headings. View section headings are `h2` elements set in this style (`h2.t3`), so the outline is h1 → h2 while the visual size stays small. Each in-game screen also carries a visually hidden `h1` in the header naming the game and round; the home hero and final winner keep their visible `h1`. The header's "Round N" line is 750 at 1.05rem.
 - **Body** (400, 16px, 1.45): instructions, hints and highlights, with secondary copy at .88-.92rem in Ink 2. The hero subtitle is capped at 28ch.
-- **Label** (650, .75-.82rem): tags, chips, badges, segment captions, crew-picker captions and the header subline.
+- **Label** (650-700, .75-.82rem): tags, chips, badges, segment captions, crew-picker names and the header subline. Buttons set at 700.
 - **Sounding** (italic, 750-800, tabular-nums): every number that is a score, bid, trick count, delta or tick. Sizes step from the .75rem tick, through the .78rem tag value, the 1.2rem row total, 1.5rem bid keys and 1.7rem bid cells, up to 2-2.4rem for hero counts and nailed scores. Table-screen mode enlarges them to 2.1-2.6rem.
 - **Game code** (750-800, tracked .14em in the header chip, .28em in the lobby and .32em in the join field): the four-letter room code, the only tracked text in the system.
 
 ### Named Rules
 **The Soundings Rule.** Every score, bid, count and delta is italic with tabular numerals (`font-style: italic; font-variant-numeric: tabular-nums`). Rank numbers (`.place`) and words stay upright.
+
+**The One Sign Per Meaning Rule.** A total is a position, so it is never signed: row totals, tags, the table footer and the final total show the bare number (`plain()`, with a true minus only when negative). Only a round's change carries a sign (`signed()`, "+" or "−"). Each mark means one thing: the brass crown marks only the score leader and the winner; the final screen uses the crownless skull (`#i-skull`), keeping the crowned skull (`#i-mark`) as the logo; the trick-lead badge reads "leads tricks" with an arrow (`#i-lead`), never a crown.
 
 **The One Family Rule.** Hanken Grotesk only, self-hosted from `fonts/`. Don't use a second display face or a system display face.
 
@@ -299,49 +364,53 @@ A near-monochrome chart palette, navy ink on cool paper by day and warm ink on t
 
 ## Layout
 
-The layout is one centred column, 560px wide (`spacing.column`) with 16px side padding (`spacing.pad`) and safe-area insets on every edge. The sticky header spans the full width but aligns its content to the same column. Rhythm comes from gaps of 6, 8, 10 and 12px inside modules, 12px between cards, and 22px above section headings. Touch targets are at least 44px; primary controls are 52px (`spacing.tap`), bid keys 58px and trick-counter buttons 84px.
+The layout is one centred column, 560px wide (`spacing.column`) with 16px side padding (`spacing.pad`) and safe-area insets on every edge. The sticky header spans the full width but aligns its content to the same column. Rhythm comes from gaps of 6, 8, 10 and 12px inside modules, 12px between cards, and 22px above section headings. Touch targets are at least 44px; primary controls are 52px (`spacing.tap`), bid keys 62px and trick-counter buttons 84px.
 
-The first viewport always has the same order: the slim header (code chip, "Round N / 10" with cards and dealer, scores and menu icons), then the Standings Line, then a single action card (bid pad, trick counter or result form), then the crew list as hairline-ruled rows.
+The first viewport always has the same order: the slim header (code chip, "Round N / 10" with cards and dealer, scores and menu icons), then the Standings Line, then a single action card (bid pad, trick counter or result form), then the crew list as hairline-ruled rows. On the results screen the status line and the Score button leave the flow and sit in the **results dock**, a sticky bar at the bottom edge, so the commit stays in thumb reach while the list scrolls.
 
-There are no width breakpoints. The app responds to colour scheme, pixel density (`--hair`), reduced motion and one explicit mode. **Table-screen mode** (`body.table`) widens the column to 1100px, deepens Standings Line lanes from 38px to 58px, lays the crew board out as a multi-column grid with hairline gutters (`gap: var(--hair)` over a hairline-coloured background), and scales names, tags, chips and soundings up for viewing across a table. Bottom sheets rise from the bottom edge, capped at 560px wide and 88dvh tall.
+There is one width gate. **Table-screen mode** (`body.table`) applies only to the table-screen seat on a viewport at least 700px wide; a phone watching the table keeps the phone layout. Table mode widens the column to 1100px, deepens Standings Line lanes to 58px, lays the crew board out as a multi-column grid with hairline gutters (`gap: var(--hair)` over a hairline-coloured background), and scales names, tags, chips and soundings up for viewing across a table. Otherwise the app responds to colour scheme, pixel density (`--hair`) and reduced motion. Bottom sheets rise from the bottom edge, capped at 560px wide and 88dvh tall.
 
 ## Elevation & Depth
 
-The system is flat. Depth is shown by the chart's own means: tint fills in two steps (shoal tint, deep shoal tint), hairlines, and the Standings Line's water bands, which run from tinted shallows to clear deep water. Cards, rows, tags and controls cast no shadows. Floating layers are the only exception: the bottom sheet and the toast lift off the page with a soft, two-part shadow (`--shadow`), and the sheet sits over a 45% navy scrim. The sticky header is separated by a frosted backdrop (`saturate(1.4) blur(14px)`) and a bottom hairline, not by a shadow.
+The system is flat. Depth is shown by the chart's own means: tint fills in two steps, hairlines, and the Standings Line's water bands, which run from tinted shallows to clear deep water. Cards, rows, tags and controls never lift. Floating layers are the only exception: the bottom sheet and the toast lift off the page with a soft, two-part shadow (`--shadow`), and the sheet sits over a 45% black scrim. The sticky header (88% page ground, `saturate(1.4) blur(14px)`, bottom hairline) and the results dock (92% page ground, `blur(10px)`, top hairline) are separated by frost and a hairline, not by a shadow.
 
 ### Shadow Vocabulary
 - **Overlay** (`box-shadow: 0 1px 2px rgba(14, 27, 44, .06), 0 8px 24px -12px rgba(14, 27, 44, .18)`; night: `0 1px 2px rgba(0, 0, 0, .45), 0 10px 30px -14px rgba(0, 0, 0, .75)`): bottom sheets and the toast only.
+- **Press edge** (`inset 0 -3px 0`, magenta mixed 65% with black on the primary button and the selected bid key, strong hairline on resting bid keys; pressed: `inset 0 -1px 0 rgba(0, 0, 0, .25)` with `translateY(2px)`): a heavier bottom edge drawn inside the piece, following its rounded corners. It is a keycap edge, not a lift.
+- **Rings** (`0 0 0 var(--hair) var(--line-strong)` on flags; `inset 0 0 0 var(--hair)` at 40% magenta on your crew row): hairlines drawn with box-shadow, not elevation.
 
 ### Named Rules
-**The Hairline Rule.** Every structural line is `var(--hair)` (one device pixel), in `hairline` or `hairline-strong`, including chip, badge, warning-box and icon-button borders and the flag ring. Dashed hairlines mark soft boundaries: depth contours, the nudge chip, the offline note and the chart's zero line.
+**The Hairline Rule.** Every structural line is `var(--hair)` (one device pixel), in `hairline` or `hairline-strong`, including chip, badge, warning-box and icon-button borders, the flag ring and your row's ring. Dashed hairlines mark soft boundaries: depth contours, the nudge chip, the offline note and the chart's zero line.
 
-**The Overlays-Only Lift Rule.** A shadow means "this floats above the chart" (sheet, toast). In-flow surfaces never carry a shadow, halo or glow.
+**The Overlays-Only Lift Rule.** A drop shadow means "this floats above the chart" (sheet, toast). In-flow surfaces never carry a drop shadow, halo or glow; the only box-shadows they carry are inset: hairline rings and the press edge of game pieces.
+
+**The Pressable Piece Rule.** Only game pieces you tap to play (the primary button and bid keys) get the 3px press edge, and it always collapses on press. Cards, rows, chips and secondary buttons stay flat.
 
 ## Shapes
 
-Shapes are soft-cornered rectangles that get rounder as they get smaller and more tappable. Cards, the crew board and the menu list use 14px corners (`rounded.card`). Buttons, inputs, bid keys, the toast, the warning box and the QR frame use 12px (`rounded.control`). Bid cells and segment buttons use 10px, Standings Line tags 8px, crew tiles 7px (`rounded.tile`; 5px at 20-22px, `rounded.tile-sm`), badges 6px, and flags 2px, which keeps them reading as cloth rectangles. Chips, toggles and the code chip are full pills (`rounded.pill`). Bottom sheets round only their top corners (`rounded.sheet`, 20px) and carry a 36×4px grab bar. Circles are used only for the 5px Standings Line waterline dots, the 7px connection dot and the locked-bid check disc.
+Shapes are soft, generously rounded rectangles. Cards, the crew board and the menu list use 18px corners (`rounded.card`, `--radius`). Buttons, bid keys and crew-picker cards use 14px (`rounded.piece`). Inputs, icon buttons, the toast, the warning box, stepper buttons and the QR frame use 12px (`rounded.control`). Bid cells, segment buttons and dealer buttons use 10px; crew tiles 7px by default (`rounded.tile`; 5px at 20-22px, `rounded.tile-sm`; 10px at 34-44px, `rounded.tile-row`), badges 6px, and flags 2px, which keeps them reading as cloth rectangles. Chips, toggles, the code chip, crew-picker chips and Standings Line tags are full pills (`rounded.pill`). Bottom sheets round only their top corners (`rounded.sheet`, 20px) and carry a 36×4px grab bar. Circles are used for the round avatars inside Standings Line tags, the 5px waterline dots, the 7px connection dot, the 16px dealer radio dot, the seat-number disc and the locked-bid check disc.
 
-Crew characters are the recurring silhouette: 16×16 pixel-art sprites (Captain, Deckhand, Gunner, Parrot Pete, Coralia, Pearl, Kraken, Whale, Crab, Skull King) rendered as crisp SVG (`shape-rendering: crispEdges`, one rect per pixel run) at 84% of a square tile. Each character differs by outline as well as colour: a tricorne, a headscarf, a beard, a parrot on the shoulder, long hair, a crown of shells, tentacles, a spout, claws, a crowned skull. Signal flags remain only as the fallback before a player picks: an 18×13 rectangle drawn in one of eight patterns (solid, horizontal halves, vertical halves, cross, diagonal, centred square, three bands, quarters) in the seat's colour on white, outlined by a one-device-pixel strong-hairline ring. Icons come from a single inline SVG sprite in `index.html`, drawn as 24-unit outline icons with a 1.75 stroke and round caps and joins, at 20px (16px small, 14px in chips).
+Crew characters are the recurring silhouette: twenty 16×16 pixel-art sprites (Captain, Deckhand, Gunner, Parrot Pete, Coralia, Pearl, Kraken, Whale, Crab, Cook, First Mate, Lookout, Lady Captain, Tigress, Escape Flag, Loot Chest, Ghost Pirate, Skeleton, Sea Witch, Skull King) rendered as crisp SVG (`shape-rendering: crispEdges`, one rect per pixel run) at 84% of a square tile. Each character differs by outline as well as colour. Signal flags remain only as the fallback before a player picks: an 18×13 rectangle drawn in one of eight patterns (solid, horizontal halves, vertical halves, cross, diagonal, centred square, three bands, quarters) in the seat's colour on white, outlined by a one-device-pixel strong-hairline ring. Icons come from a single inline SVG sprite in `index.html`, drawn as 24-unit outline icons with a 1.75 stroke and round caps and joins, at 20px (16px small, 14px in chips, 12px extra-small in badges and picker chips). The two filled exceptions are the crowned skull logo (`#i-mark`) and the crownless final-screen skull (`#i-skull`).
 
 ## Components
 
 ### Buttons
-Buttons feel firm and quiet: full-width slabs that tint on hover rather than glow.
-- **Shape:** gently rounded (12px), full width, at least 52px tall, weight 650, hairline-strong border.
-- **Primary (magenta):** the one action this player needs to take now. There is at most one per screen.
-- **Ink:** a solid chart-ink slab for table-level commits that aren't "your" action (for example, scoring the round).
+Buttons feel firm: full-width slabs that tint on hover rather than glow, with the primary one built like a game piece.
+- **Shape:** generously rounded (14px), full width, at least 52px tall, weight 700, hairline-strong border.
+- **Primary (magenta):** the one action this player needs to take now. There is at most one per screen. It carries the press edge.
+- **Ink:** a solid chart-ink slab for table-level commits that aren't "your" action.
 - **Secondary:** a paper-surface slab with a hairline border.
 - **Ghost / Link:** a transparent ghost button in Ink 2, or an underlined text link with a strong-hairline underline at a 3px offset.
-- **Hover / Focus / Active:** hover moves secondary to shoal tint and mixes primary 14% toward ink. Press scales to .985 over .1s. Focus shows a 2px magenta outline at a 2px offset. Disabled drops to 40% opacity.
+- **Hover / Focus / Active:** hover moves secondary to shoal tint and mixes primary 14% toward ink. Primary presses down 2px as its edge collapses; other buttons scale to .985 over .1s. Focus shows a 2px magenta outline at a 2px offset. Disabled drops to 40% opacity.
 - **Icon button:** 44px square, 12px corners, transparent, shoal tint on hover.
 
 ### Chips
-- **Style:** pill, .8rem weight 650, tabular. The default is a shoal tint with Ink 2 text.
+- **Style:** pill, .8rem weight 650, tabular, 5px 11px padding. The default is a shoal tint with Ink 2 text.
 - **State:** *good* has a transparent fill, a 50% green outline and a check icon. *Bad* has the miss hatch fill, a 50% red outline and an × icon. *Lock* ("In") is solid chart ink. *Zero-safe* has a strong-hairline outline. *Nudge* is a dashed hairline button that turns magenta on hover, with its hit area extended by a pseudo-element.
-- **Badge:** a small 6px-cornered hairline outline label (.75rem, 700) for "dealer" and "leads"; "leads" switches to a deep shoal fill.
+- **Badge:** a small 6px-cornered hairline outline label (.75rem, 700) for "dealer" and "leads tricks". "Leads tricks" switches to a deep shoal fill and leads with the 12px arrow icon; it means only who plays first.
 
 ### Cards / Containers
-- **Corner Style:** 14px.
+- **Corner Style:** 18px.
 - **Background:** paper surface, or shoal tint for quiet cards (borderless).
 - **Shadow Strategy:** none (see Elevation & Depth).
 - **Border:** a hairline. The action card switches it to magenta, which makes it the single magenta-edged module on screen. A nailed-bid card switches it to brass fill.
@@ -350,33 +419,42 @@ Buttons feel firm and quiet: full-width slabs that tint on hover rather than glo
 ### Inputs / Fields
 - **Style:** 52px tall, 12px corners, paper surface, strong hairline border, 14px horizontal padding, placeholder in Ink 3. The join-code field is centred, uppercase, 750 weight and tracked .32em.
 - **Focus:** the border turns magenta (no glow), and the caret is magenta.
-- **Segmented control:** a hairline-bordered 13px tray with a 3px inset; the selected segment fills with deep shoal tint.
+- **Segmented control:** a hairline-bordered 13px tray with a 3px inset; the selected segment fills with deep shoal tint. Exposed as a radio group.
 - **Stepper:** a 46px tinted ± pair with the value between them as an italic sounding.
+- **Dealer choice:** one radio group across the setup name rows ("Who deals first"). Each row ends in a 44px, 10px-cornered button: unselected it shows a hollow 16px dot in strong hairline; selected it fills with chart ink and reads "Deals" after an extra-small check.
 
 ### Navigation
-- **Header:** sticky and slim, frosted 88% page ground, hairline bottom. It holds the code chip (a pill with a status dot and a tracked code; offline adds a red outline and a text label), the round title, and icon buttons for the scores table and the menu.
+- **Header:** sticky and slim, frosted 88% page ground, hairline bottom. It holds the visually hidden page `h1`, the code chip (a pill with a status dot and a tracked code; offline adds a red outline and a text label), the round title, and icon buttons for the scores table and the menu.
 - **Menu sheet:** a bottom sheet holding a hairline-ruled list of 52px rows with Ink 2 icons that tint on hover.
 
 ### The Standings Line (signature)
-A full-width depth scale under the header. A strong-hairline waterline carries italic tick soundings, with zero set in bold ink. Behind the markers, three equal water bands run from deep-shoal-tinted **shallows** through shoal-tinted middle water to clear **deep water**. They are separated by dashed hairline contours and lettered in small italic water type. Each player is a marker: a 5px dot on the waterline (magenta for you), a hairline stem and a tag holding their 20px crew tile (or flag), name (dropped in compact mode) and total as a sounding. The leader's tag is crowned in brass. Lanes are measured from the tags' real widths, so tags never overlap.
-- **Motion:** transform-only. Markers glide on `translateX` over .95s, tags rise between lanes on `translateY` over .6s, and stems grow on `scaleY` from the waterline. A `measuring` class freezes transitions while lanes are measured, and markers then glide from their previous soundings. After a round is scored, each tag shows that round's delta as a coloured italic sounding that fades over 3.4s.
+A full-width depth scale under the header. A strong-hairline waterline carries italic tick soundings, with zero set in bold ink. Behind the markers, three equal water bands run from the **shallows** (`--water-1`) through middle water (`--water-2`) to clear **deep water**. They are separated by dashed hairline contours and lettered in small italic water type. Each player is a marker: a 5px dot on the waterline (magenta for you), a hairline stem and a pill tag holding a round 20px avatar (or flag), name and unsigned total as a sounding. The leader's tag is crowned in brass. Lanes are measured from the tags' real widths, so tags never overlap.
+- **Slim and full:** on phones the line is slim by default (`compact`: 32px lanes, tags show only the avatar and total). It opens to full (44px lanes, names shown) at the bid reveal, after a round is scored, on the final screen and in table mode (58px lanes); a phone falls back to slim if the full line would need more than three lanes.
+- **Motion:** transform-only. Markers glide on `translateX` over .95s, tags rise between lanes on `translateY` over .6s, and stems grow on `scaleY` from the waterline. A `measuring` class freezes transitions while lanes are measured, and markers then glide from their previous soundings. After a round is scored, each tag shows that round's signed delta as a coloured italic sounding that fades over 3.4s.
 
 ### Crew List
-A hairline-ruled board of 60px rows on a grid of crew tile (30px), name and sub-line, status chip, and total sounding. Your row carries the magenta wash. In table-screen mode the board becomes a 2-column grid of 88px cells with 44px tiles.
+A hairline-ruled board (18px corners) of 60px rows on a grid of crew tile (34px, 10px corners), name and sub-line, status chip, and unsigned total sounding. Each row carries a soft wash of that player's crew colour, 10% at the left edge fading out by 60% of the width. Your row replaces the wash with the flat magenta tint plus a hairline ring at 40% magenta. In table-screen mode the board becomes a multi-column grid of 88px cells with 44px tiles.
 
 ### Crew Tile
-The player mark everywhere a flag used to stand: the character sprite on a square pastel ground (`color-mix(in srgb, <crew colour> 24%, #ffffff)`), no border or ring. It sizes to its context: 20px with 5px corners in Standings Line tags, the chart legend and round rows; 22px in the menu; 24px in the score-table header; 26px by default; 30px in crew rows, the podium, bid cells and seat buttons; 64px with 14px corners in the picker; 76px with 16px corners for the final winner. Table-screen mode raises rows to 44px, tags to 28px and bid cells to 40px. A player without a character shows their signal flag at the same spot.
+The player mark everywhere a flag used to stand: the character sprite on a square ground of its crew colour mixed into the tile ground (24% into white by day, 46% into the wood surface at night), no border or ring. It sizes to its context: 20px and round in Standings Line tags; 20px with 5px corners in the chart legend and round rows; 22px in the menu; 24px in the score-table header; 26px by default; 30px in bid cells and seat buttons; 34px with 10px corners in crew and podium rows; 40px in the personal end line and the home parade; 54px with 12px corners in the picker (64px for the champion's reward); 76px with 16px corners for the final winner. Table-screen mode raises rows to 44px, tags to 28px and bid cells to 40px. A player without a character shows their signal flag at the same spot.
 
 ### Crew Picker
-Each player picks a character on joining. Ten picker cards sit on an auto-fill grid (96px minimum, 10px gap): a paper-surface card with 14px corners and a strong hairline, holding a 64px tile and the name at .9rem. Hover tints to shoal; press scales to .97. Your pick takes the magenta edge and wash. A character another player holds is disabled: the tile goes greyscale at 45% opacity, the name drops to Ink 3, and a .75rem caption reads "Taken by <name>". **The Skull King is earned:** only the previous game's winner (`game.champion`, set by Rematch) may pick him; for everyone else his card is disabled with "Last winner only". The lobby announces the champion in a brass nailed-bid card with a Claim button for them. Below the grid sits "Keep <character>" or a "Skip for now (use a flag)" link.
+Each player picks a character on joining. Twenty equal picker cards sit on an auto-fill grid (76px minimum, 8px gap): a paper-surface card with 14px corners and a strong hairline, holding a 54px tile and the name at .8rem. Hover tints to shoal; press scales to .97. Your pick takes the magenta edge and wash. A character another player holds is disabled (tile greyscale at 45% opacity, name in Ink 3) and carries a solid ink pill chip under the tile with the owner's name. **The Skull King is earned:** only the previous game's winner (`game.champion`, set by Rematch) may pick him. For the champion his card comes first, spans two columns, takes a brass-fill edge, a 64px tile and a brass "Claim" chip with a crown; for everyone else it comes last, disabled, with a "Winner" chip. The lobby also announces the champion in a brass nailed-bid card with a Claim button for them. Below the grid sits "Keep <character>" or a "Skip for now (use a flag)" link.
+
+### Home Parade
+Under the home hero, seven crew tiles (40px, 11px corners) bob 4px in a staggered wave (2.6s, ease-in-out, offset .37s each). It is decorative (`aria-hidden`), is the only ambient loop in the app, and collapses under reduced motion.
 
 ### Bid Pad, Hidden Bid and Reveal Strip
-- **Bid pad:** a grid of tinted 58px keys with italic 1.5rem numerals. The selected key fills magenta.
-- **Hidden locked bid:** after you bid, your number disappears from the screen. A "Bid is in" card shows an ink check disc and a **hold-to-peek** button that reveals "Your bid: N" in an inverted ink, italic state only while the pointer (or Space/Enter) is held.
+- **Bid pad:** a grid of tinted 62px keys with 14px corners, italic 1.5rem numerals and the press edge (strong hairline at rest, dark magenta when selected). The selected key fills magenta. Pressing moves the key down 2px as the edge collapses.
+- **Hidden locked bid:** after you bid, your number disappears from the screen. A "Bid is in" card shows an ink check disc and a **Peek** control that turns into an inverted ink, italic "Your bid: N". A quick tap shows it for 3 seconds; holding shows it only while held; Enter or Space toggles it with the same 3-second timeout. Each reveal updates the button's label and is announced through the polite live region.
 - **Reveal strip:** when bidding closes, every bid cell (tint, with your cell magenta-washed) flips up from its base (`rotateX(-88deg)`, .7s) in a 120ms stagger, and its numeral pops in 180ms later. The strip then stays as the round's reference. The direction contract specified a flip of the bids within the crew rows; the build uses this dedicated strip instead.
 
+### Results Dock
+On the results screen, a sticky bar pinned to the bottom edge, full-bleed across the column, frosted at 92% page ground with a top hairline and safe-area padding. It holds the status line (bell and Ink 2 while waiting; check and Made Green when everyone is in) and the Score button, which becomes the magenta primary only when the round is ready and you have nothing left to enter. The table screen has no dock.
+
 ### Round Scored and Final
-A nailed bid turns the result card brass. The crown springs in (`crownin`, .9s overshoot) and the score counts up over 900ms with a quartic ease-out. A miss shows its score in miss red. On the final screen the winner's crew tile rises (1s), its crown follows .5s later, the podium winner's place (1.3rem) and total are set in brass, and the "voyage" chart draws each player's line in their character's colour with their seat's dash pattern, ending on their character sprite (or flag).
+A nailed bid turns the result card brass (brass-fill border, brass big score), and the score counts up over 900ms with a quartic ease-out; the card's mark springs in (`crownin`, .9s overshoot). A miss shows its score in miss red. On the final screen the crownless skull mark sits beside the winner's tile, which rises (1s) with its brass crown following .5s later; the podium winner's place (1.3rem) and total are set in brass, and the "voyage" chart draws each player's line in their character's colour with their seat's dash pattern, ending on their character sprite (or flag).
+- **Personal end line:** directly under the winner, every player gets their own card: their 40px tile, "You won the voyage" or "You finished Nth" at 1.05rem bold, and a sub-line with their best round (signed, with its round number) and bids made out of rounds played.
 
 ### Toast
 A solid ink bar with 12px corners that slides up from the bottom (.35s) with an underlined inline action. It carries the overlay shadow.
@@ -385,14 +463,16 @@ A solid ink bar with 12px corners that slides up from the bottom (.35s) with an 
 
 ### Do:
 - **Do** draw every structural line with `var(--hair)` in `hairline` or `hairline-strong`, so it renders at .5px on 2dppx screens.
-- **Do** set every score, bid, count, delta and tick as an italic tabular sounding.
+- **Do** set every score, bid, count, delta and tick as an italic tabular sounding; show totals unsigned and sign only round changes.
 - **Do** show every player as their crew character (colour plus silhouette), falling back to their signal flag only before they pick, and give every chart line its seat's dash pattern.
 - **Do** pair every miss with the -45° miss hatch and an × icon, and every hit with a check icon.
 - **Do** keep a single magenta-edged action card per screen, with at most one magenta primary button.
-- **Do** animate only `transform` and `opacity`, all on the shared `--ease` (`cubic-bezier(.16, 1, .3, 1)`), and keep the big motion for the three chosen moments: the bid reveal, a nailed bid and the round being scored (plus the final winner).
-- **Do** honour `prefers-reduced-motion`. The global rule collapses animation and transition durations to .01ms, and JavaScript count-ups are skipped. Pair every moment that only animates with a polite screen-reader announcement.
+- **Do** give the press edge only to pieces you tap to play, and make it collapse on press.
+- **Do** animate only `transform` and `opacity`, on the shared `--ease` (`cubic-bezier(.16, 1, .3, 1)`), and keep the big motion for the three chosen moments: the bid reveal, a nailed bid and the round being scored (plus the final winner). The home parade's gentle bob is the one ambient exception.
+- **Do** honour `prefers-reduced-motion`. The global rule collapses animation and transition durations to .01ms, and JavaScript count-ups are skipped. Pair every moment that only animates, and every peek, with a polite screen-reader announcement.
 - **Do** define both light and dark (Tarred Wood) values for every new token under `prefers-color-scheme`, and check that both hold contrast.
 - **Do** keep all text at .75rem (12px) or larger.
+- **Do** set view section headings as `h2` in the title style, under the hidden header `h1`.
 - **Do** draw new icons in the inline sprite as 24-unit outline icons with a 1.75 stroke and round caps and joins.
 
 ### Don't:
@@ -400,9 +480,10 @@ A solid ink bar with 12px corners that slides up from the bottom (.35s) with an 
 - **Don't** fall back to an anonymous grey scorer with one accent colour. The chart tints, soundings, crew characters and Standings Line are the identity.
 - **Don't** use chart magenta for decoration, headings or another player's data.
 - **Don't** use brass for anything except crowns, winners and the nailed-bid moment.
+- **Don't** use the crown for anything but the score leader and the winner; trick lead gets the arrow, the final screen gets the crownless skull.
 - **Don't** let anyone but the previous game's champion pick the Skull King.
-- **Don't** put shadows, halos or glows on in-flow surfaces. Shadow belongs to sheets and the toast only.
+- **Don't** put drop shadows, halos or glows on in-flow surfaces. Drop shadows belong to sheets and the toast only.
 - **Don't** let any score or status depend on colour alone.
-- **Don't** use gradients other than the miss hatch.
+- **Don't** use gradients other than the miss hatch and the crew-row wash.
 - **Don't** use emoji or text glyphs as icons. Every icon comes from the SVG sprite.
 - **Don't** animate layout properties (left, width, height, top) on the Standings Line. Use transforms only.

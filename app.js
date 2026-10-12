@@ -545,7 +545,7 @@ function lastRoundBanner(g) {
   const myScore = mine ? t[mine].rounds[r] : null;
   const myBid = mine ? g.bids?.[r]?.[mine] : null, myTricks = mine ? g.results?.[r]?.[mine]?.tricks : null;
   const nailed = mine && myBid != null && myBid === myTricks;
-  const outcome = !mine ? '' : `<div class="outcome">${icon(nailed ? 'crown' : 'target', 'crownmark')}
+  const outcome = !mine ? '' : `<div class="outcome">${icon(nailed ? 'check' : 'target', 'crownmark')}
       <div class="what">${nailed ? (myBid === 0 ? 'Zero bid nailed' : 'Bid nailed') : `Missed by ${Math.abs((myTricks ?? 0) - (myBid ?? 0))}`}
         <small>Bid ${myBid ?? '–'} · won ${myTricks ?? '–'}${g.cannon?.[r]?.[mine] ? ' · Cannonball' : ''}</small></div>
       <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span></div>`;
