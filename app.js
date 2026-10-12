@@ -302,7 +302,7 @@ function afterRender() {
     const target = +c.dataset.count, t0 = performance.now(), dur = 900;
     if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     const tick = now => {
-      const k = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - k, 4);
+      const k = Math.max(0, Math.min(1, (now - t0) / dur)), e = 1 - Math.pow(1 - k, 4); // rAF time can precede t0
       c.textContent = (c.dataset.plain ? plain : signed)(Math.round(target * e));
       if (k < 1) requestAnimationFrame(tick);
     };
