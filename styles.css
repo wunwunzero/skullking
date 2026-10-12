@@ -206,3 +206,43 @@ table.scores { border-collapse: collapse; width: 100%; font-variant-numeric: tab
 }
 .toast.on { transform: translateX(-50%) translateY(0); }
 .toast button { background: none; border: 0; color: #a0620a; font-weight: 800; padding: 6px; }
+
+/* House rules: segmented choice + toggles */
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.seg button {
+  min-height: var(--tap); border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2);
+  padding: 8px 10px; text-align: left; line-height: 1.25;
+}
+.seg button b { display: block; }
+.seg button span { font-size: .75rem; color: var(--text-2); }
+.seg button.on { border-color: var(--gold); background: rgba(233, 196, 106, .14); }
+.seg button.on b { color: var(--gold); }
+.toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.toggles button { min-height: 44px; border-radius: 999px; border: 1px solid var(--line); background: transparent; padding: 0 14px; font-weight: 600; }
+.toggles button.on { background: var(--gold); color: var(--gold-ink); border-color: var(--gold); }
+
+/* Table talk, destroyed tricks, nudges, seats */
+.hint { margin: 6px 0 0; color: var(--gold); }
+.destroy { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.destroy .icon-btn:disabled { opacity: .4; }
+button.chip.nudge { border: 1px dashed var(--text-3); color: var(--text); cursor: pointer; min-height: 36px; }
+button.chip.nudge:active { background: var(--gold); color: var(--gold-ink); }
+.badge.lead { border-color: var(--good); color: var(--good); }
+.btn.taken { opacity: .75; justify-content: flex-start; }
+.btn .chip { margin-left: auto; }
+
+/* Table screen: big scoreboard for a tablet/TV in the middle of the table */
+body.table main { max-width: 1100px; }
+body.table .board { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+body.table .prow { min-height: 88px; padding: 14px 18px; grid-template-columns: 14px 1fr auto auto; }
+body.table .prow .swatch { width: 14px; height: 48px; }
+body.table .prow .who b { font-size: 1.5rem; }
+body.table .prow .who span { font-size: 1rem; }
+body.table .prow .total { font-size: 2.2rem; min-width: 80px; }
+body.table .chip { font-size: 1rem; padding: 6px 12px; }
+body.table .progress b { font-size: 2.6rem; }
+body.table h3 { font-size: 1.7rem; }
+body.table .board { grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); }
+body.table .prow .who > b { white-space: normal; }
+.toggles button, .seg button b { white-space: nowrap; }
+.toggles button { display: inline-flex; gap: 6px; align-items: center; }

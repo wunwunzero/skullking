@@ -9,21 +9,55 @@ export const BONUS = {
   mermaids:  { pts: 20, max: 2, label: 'Mermaids caught',         hint: 'Mermaids taken by your Pirate' },
   pirates:   { pts: 30, max: 5, label: 'Pirates caught',          hint: 'Pirates taken by your Skull King' },
   skullKing: { pts: 40, max: 1, label: 'Skull King caught',       hint: 'Skull King taken by your Mermaid' },
+  loot:      { pts: 20, max: 2, label: 'Loot alliances',          hint: 'Only if your Loot ally also made their bid', exp: 'loot' },
 };
 export const BONUS_KEYS = Object.keys(BONUS);
+// Bonus keys in play for this game (Loot only with that expansion).
+export const bonusKeys = game => BONUS_KEYS.filter(k => !BONUS[k].exp || game?.expansions?.[BONUS[k].exp]);
 
 export function bonusPoints(res) {
   if (!res) return 0;
   return BONUS_KEYS.reduce((s, k) => s + (res[k] || 0) * BONUS[k].pts, 0);
 }
 
-// Score for one player in one round. Bonuses only count when the bid is made exactly.
-export function roundScore(round, bid, res) {
+// Score for one player in one round. Bonuses only count when the bid is made exactly
+// (Rascal: off by one earns half of everything).
+// opts: { mode: 'classic' | 'rascal', cannon: bool }
+export function roundScore(round, bid, res, opts = {}) {
   if (bid == null || !res || res.tricks == null) return null;
-  const tricks = res.tricks;
+  const tricks = res.tricks, diff = Math.abs(tricks - bid);
+  if (opts.mode === 'rascal') {
+    const pot = (opts.cannon ? 15 : 10) * round;
+    if (diff === 0) return pot + bonusPoints(res);
+    if (diff === 1 && !opts.cannon) return (pot + bonusPoints(res)) / 2;
+    return 0;
+  }
   if (bid === 0) return tricks === 0 ? 10 * round + bonusPoints(res) : -10 * round;
-  if (tricks === bid) return 20 * bid + bonusPoints(res);
-  return -10 * Math.abs(tricks - bid);
+  if (diff === 0) return 20 * bid + bonusPoints(res);
+  return -10 * diff;
+}
+
+// Score using the game's scoring mode and the player's Cannonball call.
+export function scoreFor(game, round, pid, res = game.results?.[round]?.[pid]) {
+  return roundScore(round, game.bids?.[round]?.[pid], res, {
+    mode: game.scoring, cannon: !!game.cannon?.[round]?.[pid],
+  });
+}
+
+// Tricks a round actually awards (Kraken / White Whale can destroy tricks).
+export const tricksInRound = (game, round) => round - (game.destroyed?.[round] || 0);
+
+// Who leads the next trick: last trick's winner, else the player after the dealer.
+export const leadNext = (game, round) => game.lead?.[round] || leaderFor(game, round);
+
+// Table talk about the bid total vs tricks available.
+export function bidHint(game, round) {
+  const bids = Object.values(game.bids?.[round] || {});
+  if (!bids.length) return null;
+  const sum = bids.reduce((a, b) => a + b, 0), d = sum - round;
+  if (d > 0) return `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: someone's going down ⚔️`;
+  if (d < 0) return `Bids total ${sum} for ${round} trick${round > 1 ? 's' : ''}: ${-d} spare trick${d < -1 ? 's' : ''} up for grabs 🎁`;
+  return `Bids total exactly ${round}: every trick is spoken for 🤝`;
 }
 
 export function sortedPlayers(game) {
@@ -60,7 +94,7 @@ export function totals(game) {
   for (const p of ps) out[p.id] = { rounds: {}, total: 0, running: [] };
   for (const r of scoredRounds(game)) {
     for (const p of ps) {
-      const s = roundScore(r, game.bids?.[r]?.[p.id], game.results?.[r]?.[p.id]) ?? 0;
+      const s = scoreFor(game, r, p.id) ?? 0;
       out[p.id].rounds[r] = s;
       out[p.id].total += s;
       out[p.id].running.push(out[p.id].total);
@@ -85,7 +119,7 @@ export function autoFillTricks(game, round) {
   const missing = ps.filter(p => res[p.id]?.tricks == null);
   if (missing.length !== 1) return null;
   const sum = ps.reduce((s, p) => s + (res[p.id]?.tricks ?? 0), 0);
-  const left = round - sum;
+  const left = tricksInRound(game, round) - sum;
   return left >= 0 ? { id: missing[0].id, tricks: left } : null;
 }
 
@@ -146,7 +180,8 @@ export function gameHighlights(game, name) {
     for (const r of rounds) {
       const s = t[p.id].rounds[r];
       if (!best || s > best.s) best = { id: p.id, s, r };
-      if (s > 0) { made++; run++; maxRun = Math.max(maxRun, run); } else run = 0;
+      const hit = game.results?.[r]?.[p.id]?.tricks === game.bids?.[r]?.[p.id];
+      if (hit) { made++; run++; maxRun = Math.max(maxRun, run); } else run = 0;
     }
     if (!streak || maxRun > streak.n) streak = { id: p.id, n: maxRun };
     if (!accurate || made > accurate.n) accurate = { id: p.id, n: made };

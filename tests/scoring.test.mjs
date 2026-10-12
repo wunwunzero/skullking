@@ -89,3 +89,49 @@ test('highlights', () => {
   const g = gameHighlights(done, name);
   assert.ok(g.some(l => l.includes('Biggest round: Ben +60 in round 3')));
 });
+
+import { scoreFor, bidHint, tricksInRound, leadNext, bonusKeys } from '../scoring.js';
+
+test('rascal: full, half when off by one, zero beyond', () => {
+  const o = { mode: 'rascal' };
+  assert.equal(roundScore(6, 2, { tricks: 2 }, o), 60);
+  assert.equal(roundScore(6, 2, { tricks: 2, black14: 1 }, o), 80);
+  assert.equal(roundScore(6, 2, { tricks: 3, black14: 1 }, o), 40);   // half of 60 + 20
+  assert.equal(roundScore(6, 2, { tricks: 1 }, o), 30);
+  assert.equal(roundScore(6, 2, { tricks: 4 }, o), 0);
+  assert.equal(roundScore(6, 0, { tricks: 0 }, o), 60);                // potential is per card, not per bid
+  assert.equal(roundScore(5, 0, { tricks: 1 }, o), 25);
+});
+
+test('rascal cannonball: 15 per card or nothing', () => {
+  const o = { mode: 'rascal', cannon: true };
+  assert.equal(roundScore(6, 2, { tricks: 2 }, o), 90);
+  assert.equal(roundScore(6, 2, { tricks: 2, std14: 1 }, o), 100);
+  assert.equal(roundScore(6, 2, { tricks: 3 }, o), 0);
+});
+
+test('loot bonus, only listed when the expansion is on', () => {
+  assert.equal(roundScore(4, 1, { tricks: 1, loot: 2 }), 60);
+  assert.equal(roundScore(4, 1, { tricks: 2, loot: 2 }), -10);
+  assert.ok(!bonusKeys({}).includes('loot'));
+  assert.ok(bonusKeys({ expansions: { loot: true } }).includes('loot'));
+});
+
+test('scoreFor uses game mode and cannonball calls', () => {
+  const g = { scoring: 'rascal', bids: { 3: { a: 1 } }, cannon: { 3: { a: true } }, results: { 3: { a: { tricks: 1 } } } };
+  assert.equal(scoreFor(g, 3, 'a'), 45);
+});
+
+test('destroyed tricks shrink the round and auto-fill', () => {
+  const g = { players: { a: { name: 'A', order: 0 }, b: { name: 'B', order: 1 } }, destroyed: { 4: 1 }, results: { 4: { a: { tricks: 2 } } } };
+  assert.equal(tricksInRound(g, 4), 3);
+  assert.deepEqual(autoFillTricks(g, 4), { id: 'b', tricks: 1 });
+});
+
+test('lead next and bid hints', () => {
+  assert.equal(leadNext(game, 1), 'c');
+  assert.equal(leadNext({ ...game, lead: { 1: 'a' } }, 1), 'a');
+  assert.match(bidHint({ bids: { 5: { a: 3, b: 3 } } }, 5), /going down/);
+  assert.match(bidHint({ bids: { 5: { a: 1, b: 2 } } }, 5), /2 spare tricks/);
+  assert.match(bidHint({ bids: { 5: { a: 2, b: 3 } } }, 5), /exactly 5/);
+});

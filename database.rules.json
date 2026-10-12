@@ -3,9 +3,11 @@
     ".read": false,
     ".write": false,
     "games": {
+      ".indexOn": ["createdAt"],
+      ".read": "auth != null && query.orderByChild == 'createdAt' && query.endAt <= now - 2592000000 && query.limitToFirst <= 25",
       "$code": {
         ".read": "auth != null && $code.matches(/^[A-HJ-NP-Z]{4}$/)",
-        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z]{4}$/) && !data.exists() && newData.exists()",
+        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z]{4}$/) && ((!data.exists() && newData.exists()) || (data.exists() && !newData.exists() && data.child('createdAt').val() < now - 2592000000))",
         ".validate": "newData.hasChildren(['createdAt', 'phase', 'round', 'players'])",
         "createdAt": { ".validate": "newData.isNumber()" },
         "phase": {
@@ -17,6 +19,13 @@
           ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
         },
         "firstDealer": { ".validate": "newData.isString() && newData.val().matches(/^p[0-7]$/)" },
+        "scoring": { ".validate": "newData.isString() && newData.val().matches(/^(classic|rascal)$/)" },
+        "expansions": {
+          "kraken": { ".validate": "newData.isBoolean()" },
+          "whale": { ".validate": "newData.isBoolean()" },
+          "loot": { ".validate": "newData.isBoolean()" },
+          "$other": { ".validate": false }
+        },
         "next": {
           ".write": "auth != null && data.parent().exists()",
           ".validate": "newData.isString() && newData.val().matches(/^[A-HJ-NP-Z]{4}$/)"
@@ -29,6 +38,14 @@
             "$other": { ".validate": false }
           }
         },
+        "presence": {
+          ".write": "auth != null && data.parent().exists()",
+          "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isString() && newData.val().length <= 40" }
+        },
+        "nudge": {
+          ".write": "auth != null && data.parent().exists()",
+          "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber()" }
+        },
         "undo": {
           ".write": "auth != null && data.parent().exists()",
           ".validate": "newData.hasChildren(['phase', 'round', 'label'])",
@@ -37,11 +54,28 @@
           "label": { ".validate": "newData.isString() && newData.val().length <= 60" },
           "$other": { ".validate": false }
         },
+        "history": {
+          ".write": "auth != null && data.parent().exists()",
+          "$k": {
+            ".validate": "$k.matches(/^[0-9]{13}$/) && newData.hasChildren(['phase', 'round', 'label'])",
+            "phase": { ".validate": "newData.isString() && newData.val().matches(/^(bidding|playing|results)$/)" },
+            "round": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+            "label": { ".validate": "newData.isString() && newData.val().length <= 60" },
+            "$other": { ".validate": false }
+          }
+        },
         "bids": {
           ".write": "auth != null && data.parent().exists()",
           "$r": {
             ".validate": "$r.matches(/^([1-9]|10)$/)",
             "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" }
+          }
+        },
+        "cannon": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": {
+            ".validate": "$r.matches(/^([1-9]|10)$/)",
+            "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isBoolean()" }
           }
         },
         "live": {
@@ -50,6 +84,14 @@
             ".validate": "$r.matches(/^([1-9]|10)$/)",
             "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" }
           }
+        },
+        "lead": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": { ".validate": "$r.matches(/^([1-9]|10)$/) && newData.isString() && newData.val().matches(/^p[0-7]$/)" }
+        },
+        "destroyed": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": { ".validate": "$r.matches(/^([1-9]|10)$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" }
         },
         "results": {
           ".write": "auth != null && data.parent().exists()",
@@ -63,6 +105,7 @@
               "mermaids": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" },
               "pirates": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5" },
               "skullKing": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" },
+              "loot": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" },
               "$other": { ".validate": false }
             }
           }

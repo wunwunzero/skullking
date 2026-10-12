@@ -1,7 +1,7 @@
 import { openStore } from './store.js';
 import {
-  ROUNDS, BONUS, BONUS_KEYS, roundScore, sortedPlayers, dealerFor, leaderFor, totals, ranking,
-  autoFillTricks, liveStatus, roundHighlights, gameHighlights,
+  ROUNDS, BONUS, bonusKeys, roundScore, scoreFor, sortedPlayers, dealerFor, leaderFor, leadNext, totals, ranking,
+  autoFillTricks, liveStatus, roundHighlights, gameHighlights, tricksInRound, bidHint,
 } from './scoring.js';
 
 const COLORS = ['#e9c46a', '#5ec8f2', '#ff7b7b', '#7ee08a', '#c79bff', '#ff9f43', '#f78fb3', '#9fb3c8'];
@@ -22,6 +22,8 @@ const S = {
   bonusOpen: {},       // `${round}:${pid}` -> bool
   sheet: null,         // { kind, ...args }
   lastPhaseKey: null, revealAnim: false,
+  claimed: null,       // seat this phone has claimed in presence
+  nudgeSeen: null,     // last nudge timestamp already handled
 };
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -38,6 +40,50 @@ function loadSeat(code) {
 }
 function saveSeat(code, seat) {
   try { sessionStorage.setItem(seatKey(code), seat); localStorage.setItem(seatKey(code), seat); } catch {}
+}
+
+// One id per phone (per tab with ?fresh, for testing) so seats can show "on another phone".
+const DEVICE = (() => {
+  const fresh = new URLSearchParams(location.search).has('fresh');
+  const store = fresh ? sessionStorage : localStorage;
+  try {
+    let id = store.getItem('sk.device');
+    if (!id) { id = crypto.randomUUID().slice(0, 18); store.setItem('sk.device', id); }
+    return id;
+  } catch { return 'dev-' + Math.random().toString(36).slice(2, 10); }
+})();
+
+// Hold this phone's seat in presence; re-claim after a reconnect clears it.
+function syncPresence(g) {
+  const seat = S.seat;
+  if (!seat || seat === 'watch' || !g?.players?.[seat]) return;
+  const holder = g.presence?.[seat];
+  if (holder === DEVICE) return;
+  if (holder && S.claimed === seat) {
+    // Someone took this seat over on another phone.
+    S.seat = null; S.claimed = null;
+    try { sessionStorage.removeItem(seatKey(S.code)); localStorage.removeItem(seatKey(S.code)); } catch {}
+    toast(`${name(seat)} is now playing on another phone`);
+    return;
+  }
+  if (!holder) { S.claimed = seat; S.store.claim(S.code, seat, DEVICE).catch(() => {}); }
+}
+
+// ---------- undo history ----------
+const historyKeys = g => Object.keys(g.history || {}).sort();
+function lastUndo(g) {
+  const keys = historyKeys(g);
+  if (keys.length) return { key: keys[keys.length - 1], ...g.history[keys[keys.length - 1]] };
+  return g.undo ? { legacy: true, ...g.undo } : null;
+}
+// Record where we were before a phase change; keep the last 40 steps.
+function withHistory(g, patch, label) {
+  const keys = historyKeys(g);
+  let k = Date.now();
+  if (keys.length && +keys[keys.length - 1] >= k) k = +keys[keys.length - 1] + 1;
+  patch[`history/${k}`] = { phase: g.phase, round: g.round, label };
+  keys.slice(0, Math.max(0, keys.length - 39)).forEach(old => { patch[`history/${old}`] = null; });
+  return patch;
 }
 
 // ---------- toast ----------
@@ -80,7 +126,8 @@ function route() {
   if (code === S.code) return render();
   S.unsub?.(); S.unsub = null;
   S.code = code.length === 4 ? code : null;
-  S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null;
+  if (S.claimed && S.code) S.store.release(S.code, S.claimed).catch(() => {});
+  S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null; S.claimed = null; S.nudgeSeen = null;
   if (S.code) {
     S.seat = loadSeat(S.code);
     S.unsub = S.store.subscribe(S.code, g => onGame(g));
@@ -105,9 +152,24 @@ function onGame(g) {
       location.hash = g.next;
       return;
     }
+    syncPresence(g);
+    checkNudge(g);
     maybeReveal(g);
   }
   render();
+}
+
+// Someone tapped "Nudge" on this phone's player.
+function checkNudge(g) {
+  const seat = S.seat, t = seat && seat !== 'watch' ? g.nudge?.[seat] : null;
+  if (S.nudgeSeen === null) { S.nudgeSeen = t || 0; return; }
+  if (t && t > S.nudgeSeen) {
+    S.nudgeSeen = t;
+    if (Date.now() - t < 120000) {
+      navigator.vibrate?.([120, 60, 120]); chime();
+      toast(g.phase === 'results' ? '⏰ The crew is waiting for your tricks!' : '⏰ The crew is waiting for your bid!');
+    }
+  }
 }
 
 // Any phone flips bidding → playing once every bid is in (idempotent).
@@ -123,6 +185,7 @@ function update(patch) {
 
 // ---------- render ----------
 function render() {
+  document.body.classList.toggle('table', S.seat === 'watch' && !!S.code);
   renderTop();
   if (!S.code) { $app.innerHTML = S.setup ? setupView() : homeView(); }
   else if (S.game === undefined) { $app.innerHTML = '<p class="loading">Finding the ship…</p>'; }
@@ -184,12 +247,22 @@ function setupView() {
         ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="Remove player ${i + 1}">×</button>` : ''}
       </div>`).join('')}
     ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">+ Add player</button>` : ''}
-    <button class="btn primary" style="margin-top:16px">Create game</button>
+    <h3 style="margin-top:20px">House rules</h3>
+    <div class="seg" role="radiogroup" aria-label="Scoring">
+      <button type="button" role="radio" aria-checked="${S.setup.scoring === 'classic'}" class="${S.setup.scoring === 'classic' ? 'on' : ''}" data-act="set-scoring" data-v="classic"><b>Classic</b><span>±20 per trick</span></button>
+      <button type="button" role="radio" aria-checked="${S.setup.scoring === 'rascal'}" class="${S.setup.scoring === 'rascal' ? 'on' : ''}" data-act="set-scoring" data-v="rascal"><b>Rascal</b><span>10/card, half if off by 1</span></button>
+    </div>
+    <p class="muted small" style="margin:12px 0 6px">Expansion cards in the deck</p>
+    <div class="toggles">
+      ${[['kraken', '🐙 Kraken'], ['whale', '🐋 White Whale'], ['loot', '💰 Loot']].map(([k, l]) =>
+        `<button type="button" aria-pressed="${!!S.setup.exp[k]}" class="${S.setup.exp[k] ? 'on' : ''}" data-act="toggle-exp" data-k="${k}">${l}</button>`).join('')}
+    </div>
+    <button class="btn primary" style="margin-top:20px">Create game</button>
     <button type="button" class="btn ghost" data-act="cancel-setup">Cancel</button>
   </form>`;
 }
 
-async function createGame(names, dealer) {
+async function createGame(names, dealer, opts = {}) {
   let code;
   for (let i = 0; i < 8; i++) {
     code = Array.from(crypto.getRandomValues(new Uint32Array(4)), x => CODE_CHARS[x % CODE_CHARS.length]).join('');
@@ -197,7 +270,10 @@ async function createGame(names, dealer) {
   }
   const players = {};
   names.forEach((n, i) => { players['p' + i] = { name: n, order: i }; });
-  await S.store.create(code, { createdAt: Date.now(), phase: 'lobby', round: 1, firstDealer: 'p' + dealer, players });
+  const game = { createdAt: Date.now(), phase: 'lobby', round: 1, firstDealer: 'p' + dealer, players, scoring: opts.scoring || 'classic' };
+  const exp = Object.fromEntries(Object.entries(opts.exp || {}).filter(([, v]) => v));
+  if (Object.keys(exp).length) game.expansions = exp;
+  await S.store.create(code, game);
   S.setup = null;
   location.hash = code;
 }
@@ -209,13 +285,23 @@ function seatView() {
   <h2 style="margin-top:16px">Who are you?</h2>
   <p class="muted small">Game ${esc(S.code)}. Pick your name to bid from this phone.</p>
   <div class="seat-list">
-    ${ps.map(p => `<button class="btn" data-act="seat" data-id="${p.id}"><span class="dot" style="background:${color(p.id)}"></span>${esc(p.name)}</button>`).join('')}
-    <button class="btn ghost" data-act="seat" data-id="watch">Just watching (table screen)</button>
+    ${ps.map(p => {
+      const taken = S.game.presence?.[p.id] && S.game.presence[p.id] !== DEVICE;
+      return `<button class="btn ${taken ? 'taken' : ''}" data-act="seat" data-id="${p.id}"><span class="dot" style="background:${color(p.id)}"></span>${esc(p.name)}${taken ? '<span class="chip">📱 on another phone</span>' : ''}</button>`;
+    }).join('')}
+    <button class="btn ghost" data-act="seat" data-id="watch">Table screen (big scoreboard, no seat)</button>
   </div>`;
 }
 
 function roleBadges(g, r, pid) {
-  return (dealerFor(g, r) === pid ? '<span class="badge">dealer</span>' : '') + (leaderFor(g, r) === pid ? '<span class="badge">leads</span>' : '');
+  const leader = g.phase === 'playing' ? leadNext(g, r) : leaderFor(g, r);
+  return (dealerFor(g, r) === pid ? '<span class="badge">dealer</span>' : '')
+    + (leader === pid ? `<span class="badge lead">${g.phase === 'playing' ? '▶ leads next' : 'leads'}</span>` : '');
+}
+
+function rulesLine(g) {
+  const exp = Object.keys(g.expansions || {}).map(k => ({ kraken: 'Kraken', whale: 'White Whale', loot: 'Loot' }[k]));
+  return `${g.scoring === 'rascal' ? 'Rascal scoring' : 'Classic scoring'}${exp.length ? ' · ' + exp.join(', ') : ''}`;
 }
 
 function actingBanner() {
@@ -237,7 +323,8 @@ function lobbyView(g) {
     ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
       <div class="who"><b>${esc(p.name)}${p.id === g.firstDealer ? '<span class="badge">deals first</span>' : ''}</b></div><span></span><span></span></div>`).join('')}
   </div>
-  <button class="btn primary" style="margin-top:16px" data-act="start">Start round 1</button>`;
+  <p class="muted small" style="text-align:center">${esc(rulesLine(g))} · <button class="link" data-act="rules" style="min-height:0;padding:0">rules</button></p>
+  <button class="btn primary" style="margin-top:8px" data-act="start">Start round 1</button>`;
 }
 
 let qrLoading;
@@ -262,10 +349,11 @@ function lastRoundBanner(g) {
   const rows = sortedPlayers(g).map(p => `${esc(p.name)} <b class="${t[p.id].rounds[r] >= 0 ? 'good-t' : 'bad-t'}">${signed(t[p.id].rounds[r])}</b>`).join(' · ');
   return `<div class="card gold"><h3>Round ${r} scored</h3><p class="small" style="margin:0 0 8px">${rows}</p>
     ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${esc(l)}</li>`).join('')}</ul>` : ''}
-    ${g.undo ? `<button class="link" data-act="undo">${esc(g.undo.label)}</button>` : ''}</div>`;
+    ${undoCard(g)}</div>`;
 }
 function undoCard(g) {
-  return g.undo ? `<button class="link" data-act="undo">${esc(g.undo.label)}</button>` : '';
+  const u = lastUndo(g);
+  return u ? `<button class="link" data-act="undo">${esc(u.label)}</button>` : '';
 }
 
 function biddingView(g) {
@@ -273,20 +361,31 @@ function biddingView(g) {
   const ps = sortedPlayers(g);
   const t = totals(g);
   const waiting = ps.filter(p => bids[p.id] == null).length;
+  const cannon = !!g.cannon?.[r]?.[mine];
   return `
   ${lastRoundBanner(g)}
   ${mine ? `<div class="card ${bids[mine] == null ? 'gold' : ''}">
     <h3>${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} bid · ${r} card${r > 1 ? 's' : ''}</h3>
-    <p class="muted small" style="margin:0">${bids[mine] == null ? 'Shake your fist, then tap your bid. It stays hidden until everyone has bid.' : `Locked in: <b>${bids[mine]}</b>. You can change it until the last bid is in.`}</p>
+    <p class="muted small" style="margin:0">${bids[mine] == null ? 'Shake your fist, then tap your bid. It stays hidden until everyone has bid.' : `Locked in: <b>${bids[mine]}</b>${g.scoring === 'rascal' ? (cannon ? ' 💣 Cannonball' : ' · Grapeshot') : ''}. You can change it until the last bid is in.`}</p>
     <div class="bid-grid">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}">${n}</button>`).join('')}</div>
+    ${g.scoring === 'rascal' ? `<div class="seg" style="margin-top:10px" role="radiogroup" aria-label="Rascal wager">
+      <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>Grapeshot</b><span>${10 * r} pts · half if off by 1</span></button>
+      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>💣 Cannonball</b><span>${15 * r} pts · all or nothing</span></button>
+    </div>` : ''}
   </div>` : ''}
   <h3 style="margin-top:20px">${waiting ? `Waiting for ${waiting}…` : 'Revealing…'}</h3>
   <div class="board">
     ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
       <div class="who"><b>${esc(p.name)}${roleBadges(g, r, p.id)}</b><span>${signed(t[p.id].total)} pts</span></div>
-      ${bids[p.id] != null ? '<span class="chip good">✓ locked</span>' : '<span class="chip">thinking…</span>'}
+      ${bids[p.id] != null ? '<span class="chip good">✓ locked</span>' : nudgeChip(p.id, mine)}
       <span></span></div>`).join('')}
   </div>`;
+}
+
+// "thinking…" chip that buzzes that player's phone when tapped.
+function nudgeChip(pid, mine) {
+  if (pid === mine || S.seat === pid) return '<span class="chip">thinking…</span>';
+  return `<button class="chip nudge" data-act="nudge" data-id="${pid}" aria-label="Nudge ${esc(name(pid))}">thinking… 🔔</button>`;
 }
 
 // ---------- playing ----------
@@ -300,22 +399,29 @@ function boardRows(g, r, { showLive }) {
       bust0: `<span class="chip bad">0 bid · ${got} ✗</span>`, none: '',
     }[st];
     return `<div class="prow ${p.id === mine ? 'me' : ''} ${S.revealAnim ? 'reveal' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-      <div class="who"><b>${esc(p.name)}${roleBadges(g, r, p.id)}</b><span>bid <b>${bid ?? '–'}</b></span></div>
+      <div class="who"><b>${esc(p.name)}${roleBadges(g, r, p.id)}</b><span>bid <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ' 💣' : ''}</span></div>
       ${chip}<span class="total">${signed(t[p.id].total)}</span></div>`;
   }).join('');
 }
 
 function playingView(g) {
   const r = g.round, live = g.live?.[r] || {}, mine = me();
-  const played = Object.values(live).reduce((a, b) => a + b, 0);
+  const destroyed = g.destroyed?.[r] || 0;
+  const played = Object.values(live).reduce((a, b) => a + b, 0) + destroyed;
   const done = played >= r;
+  const canDestroy = g.expansions?.kraken || g.expansions?.whale;
+  const hint = bidHint(g, r);
   return `
   <div class="card">
     <div class="progress"><span class="muted">Tricks played</span><b>${played} / ${r}</b></div>
+    ${hint ? `<p class="small hint">${esc(hint)}</p>` : ''}
     ${mine ? `<div class="counter">
       <button class="btn minus" data-act="live" data-d="-1" ${(live[mine] || 0) <= 0 ? 'disabled' : ''} aria-label="Remove a trick">−1</button>
       <button class="btn primary plus" data-act="live" data-d="1" ${done ? 'disabled' : ''}>${S.actingFor ? esc(name(mine)) : 'I'} won a trick</button>
     </div>` : ''}
+    ${canDestroy ? `<div class="destroy"><span class="small muted">🐙 Tricks destroyed: <b>${destroyed}</b></span>
+      <span><button class="icon-btn" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer destroyed trick">−</button>
+      <button class="icon-btn" data-act="destroy" data-d="1" ${done || destroyed >= 2 ? 'disabled' : ''}>+ Destroyed</button></span></div>` : ''}
   </div>
   <div class="board">${boardRows(g, r, { showLive: true })}</div>
   <button class="btn ${done ? 'primary' : ''}" style="margin-top:16px" data-act="to-results">${done ? 'Round over — check results' : 'Round over'}</button>
@@ -348,39 +454,42 @@ function effectiveResults(g, r) {
     else if (g.live?.[r]?.[p.id] != null) out[p.id] = { tricks: g.live[r][p.id], src: 'live' };
   }
   // Every trick counted live: whoever never tapped won 0.
+  const n = tricksInRound(g, r);
   const liveSum = ps.reduce((s, p) => s + (g.live?.[r]?.[p.id] || 0), 0);
-  if (liveSum === r) for (const p of ps) out[p.id] ||= { tricks: 0, src: 'live' };
+  if (liveSum === n) for (const p of ps) out[p.id] ||= { tricks: 0, src: 'live' };
   const missing = ps.filter(p => !out[p.id]);
   if (missing.length === 1) {
     const sum = Object.values(out).reduce((s, x) => s + x.tricks, 0);
-    if (r - sum >= 0) out[missing[0].id] = { tricks: r - sum, src: 'auto' };
+    if (n - sum >= 0) out[missing[0].id] = { tricks: n - sum, src: 'auto' };
   }
   return out;
 }
 
 function stepper(act, key, label, hint, val, max) {
+  const plain = esc(label.replace(/<[^>]+>/g, '').trim());
   return `<div class="stepper"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>
-    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="Less ${label}">−</button>
-    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="More ${label}">+</button></div></div>`;
+    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="Less ${plain}">−</button>
+    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="More ${plain}">+</button></div></div>`;
 }
 
 function resultForm(g, r, pid) {
-  const d = draftFor(g, r, pid), bid = g.bids?.[r]?.[pid];
-  const key = `${r}:${pid}`, open = S.bonusOpen[key] ?? BONUS_KEYS.some(k => d[k]);
-  const score = roundScore(r, bid, d);
+  const d = draftFor(g, r, pid), bid = g.bids?.[r]?.[pid], keys = bonusKeys(g);
+  const key = `${r}:${pid}`, open = S.bonusOpen[key] ?? keys.some(k => d[k]);
+  const score = scoreFor(g, r, pid, d);
   const confirmed = !!g.results?.[r]?.[pid] && !S.drafts[key];
   const made = bid === d.tricks;
   return `
-    ${stepper('draft', 'tricks', 'Tricks won', `Bid ${bid ?? '–'}`, d.tricks ?? 0, r)}
-    ${open ? BONUS_KEYS.map(k => stepper('draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, BONUS[k].hint, d[k] || 0, BONUS[k].max)).join('')
-      : `<button class="link" data-act="open-bonus">Add bonus cards (14s, captures)</button>`}
-    ${open && !made ? `<p class="small muted" style="margin:4px 0 0">Bonuses only count when the bid is made.</p>` : ''}
+    ${stepper('draft', 'tricks', 'Tricks won', `Bid ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
+    ${open ? keys.map(k => stepper('draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, BONUS[k].hint, d[k] || 0, BONUS[k].max)).join('')
+      : `<button class="link" data-act="open-bonus">Add bonus cards (14s, captures${g.expansions?.loot ? ', loot' : ''})</button>`}
+    ${open && !made ? `<p class="small muted" style="margin:4px 0 0">${g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.'}</p>` : ''}
     <div class="preview"><span class="muted">This round</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
     <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? 'Confirmed ✓' : 'Confirm'}</button>`;
 }
 
 function resultsView(g) {
   const r = g.round, mine = me(), eff = effectiveResults(g, r), ps = sortedPlayers(g);
+  const n = tricksInRound(g, r), destroyed = g.destroyed?.[r] || 0;
   const allIn = ps.every(p => eff[p.id]);
   const sum = ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0);
   const t = totals(g);
@@ -389,17 +498,20 @@ function resultsView(g) {
   <h3 style="margin-top:20px">Round ${r} results</h3>
   <div class="board">
     ${ps.map(p => {
-      const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? roundScore(r, bid, e) : null;
+      const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? scoreFor(g, r, p.id, e) : null;
       const src = !e ? 'not entered' : e.src === 'confirmed' ? 'confirmed ✓' : e.src === 'live' ? 'from live count' : 'auto-filled';
       return `<div class="prow ${p.id === mine ? 'me' : ''}"><span class="swatch" style="background:${color(p.id)}"></span>
-        <div class="who"><b>${esc(p.name)}</b><span>bid ${bid ?? '–'} · won ${e ? e.tricks : '–'} · ${src}</span></div>
-        <span class="chip ${s == null ? '' : s >= 0 ? 'good' : 'bad'}">${s == null ? '–' : signed(s)}</span>
+        <div class="who"><b>${esc(p.name)}</b><span>bid ${bid ?? '–'}${g.cannon?.[r]?.[p.id] ? ' 💣' : ''} · won ${e ? e.tricks : '–'} · ${src}</span></div>
+        ${e ? `<span class="chip ${s >= 0 ? 'good' : 'bad'}">${signed(s)}</span>` : nudgeChip(p.id, mine).replace('thinking…', 'waiting')}
         <span class="total">${signed(t[p.id].total + (s || 0))}</span></div>`;
     }).join('')}
   </div>
-  ${allIn && sum !== r ? `<div class="warnbox">Tricks add up to ${sum}, but round ${r} has ${r}. Someone's count is off.</div>` : ''}
+  ${g.expansions?.kraken || g.expansions?.whale ? `<div class="destroy card" style="margin-top:12px"><span class="small">🐙 Tricks destroyed by Kraken / White Whale: <b>${destroyed}</b></span>
+    <span><button class="icon-btn" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer">−</button>
+    <button class="icon-btn" data-act="destroy" data-d="1" ${destroyed >= 2 ? 'disabled' : ''} aria-label="One more">+</button></span></div>` : ''}
+  ${allIn && sum !== n ? `<div class="warnbox">Tricks add up to ${sum}, but this round had ${n} to win${destroyed ? ` (${r} minus ${destroyed} destroyed)` : ''}. Someone's count is off.</div>` : ''}
   ${!allIn ? `<div class="warnbox">Waiting on tricks from ${ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ')}.</div>` : ''}
-  <button class="btn primary" style="margin-top:12px" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== r ? 'Score anyway' : r === ROUNDS ? 'Score final round' : `Score round ${r}`}</button>
+  <button class="btn primary" style="margin-top:12px" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? 'Score anyway' : r === ROUNDS ? 'Score final round' : `Score round ${r}`}</button>
   <p class="small muted">Anyone without bonus cards can skip confirming — their live count is used.</p>
   ${undoCard(g)}`;
 }
@@ -471,11 +583,15 @@ function editSheet(s) {
   const g = S.game, key = `${s.r}:${s.id}`;
   const d = S.drafts[key] ||= { ...(g.results?.[s.r]?.[s.id] || { tricks: 0 }) };
   const bid = s.bid ?? g.bids?.[s.r]?.[s.id] ?? 0;
-  const score = roundScore(s.r, bid, d);
+  const cannon = s.cannon ?? !!g.cannon?.[s.r]?.[s.id];
+  const score = roundScore(s.r, bid, d, { mode: g.scoring, cannon });
   return `<p style="margin-top:0"><b style="color:${color(s.id)}">${esc(name(s.id))}</b></p>
     ${stepper('edit-bid', 'bid', 'Bid', '', bid, s.r)}
+    ${g.scoring === 'rascal' ? `<div class="seg" style="margin:6px 0" role="radiogroup" aria-label="Rascal wager">
+      <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="edit-cannon" data-v="0"><b>Grapeshot</b></button>
+      <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="edit-cannon" data-v="1"><b>💣 Cannonball</b></button></div>` : ''}
     ${stepper('edit-draft', 'tricks', 'Tricks won', '', d.tricks ?? 0, s.r)}
-    ${BONUS_KEYS.map(k => stepper('edit-draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, '', d[k] || 0, BONUS[k].max)).join('')}
+    ${bonusKeys(g).map(k => stepper('edit-draft', k, `${BONUS[k].label} <span class="muted small">+${BONUS[k].pts}</span>`, '', d[k] || 0, BONUS[k].max)).join('')}
     <div class="preview"><span class="muted">Round ${s.r}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${signed(score ?? 0)}</b></div>
     <button class="btn primary" style="margin-top:12px" data-act="save-edit">Save</button>`;
 }
@@ -486,11 +602,12 @@ function menuSheet() {
     <button class="btn" data-act="open-actfor">Enter for another player…</button>
     <button class="btn" data-act="share">Invite players (code &amp; QR)</button>
     <button class="btn" data-act="rules">Rules &amp; scoring</button>
-    ${g.undo ? `<button class="btn" data-act="undo">${esc(g.undo.label)}</button>` : ''}
+    ${lastUndo(g) ? `<button class="btn" data-act="undo">${esc(lastUndo(g).label)}</button>` : ''}
     <button class="btn" data-act="change-seat">Switch player on this phone</button>
+    ${S.seat !== 'watch' ? `<button class="btn" data-act="table-mode">Use this screen as the table scoreboard</button>` : ''}
     <button class="btn ghost" data-act="home">Leave game (it keeps going)</button>
   </div>
-  <p class="small muted">You are ${S.seat === 'watch' ? 'watching' : `<b>${esc(name(S.seat))}</b>`}. ${S.store.live ? 'Live sync on.' : 'Local mode: this device only.'}</p>`;
+  <p class="small muted">You are ${S.seat === 'watch' ? 'the table screen' : `<b>${esc(name(S.seat))}</b>`}. ${esc(rulesLine(g))}. ${S.store.live ? 'Live sync on.' : 'Local mode: this device only.'}</p>`;
 }
 
 function actForSheet() {
@@ -506,6 +623,7 @@ function shareSheet() {
 
 function rulesSheet() {
   return `<div class="rules">
+  ${S.game ? `<p class="note" style="margin-top:0">This game: ${esc(rulesLine(S.game))}</p>` : ''}
   <h3>Scoring</h3>
   <table>
     <tr><td>Bid 1+ and hit it exactly</td><td>+20 per trick</td></tr>
@@ -532,6 +650,19 @@ function rulesSheet() {
     <li>Tigress: when you play it, announce Pirate or Escape.</li>
     <li>If an Escape or special card leads, the next numbered card played sets the suit.</li>
   </ul>
+  <h3>Rascal scoring <span class="small muted">(optional)</span></h3>
+  <ul>
+    <li>Every round is worth 10 points per card dealt, whatever you bid.</li>
+    <li>Hit your bid: all of it plus bonuses. Off by one: half of everything. Off by more: nothing.</li>
+    <li>💣 Cannonball: reveal it with your bid. 15 points per card if exact, nothing otherwise.</li>
+  </ul>
+  <h3>Expansion cards <span class="small muted">(optional)</span></h3>
+  <ul>
+    <li>🐙 Kraken: the trick is destroyed and nobody wins it. Whoever would have won leads next.</li>
+    <li>🐋 White Whale: special cards lose their power; the highest number wins, any suit. If only special cards were played, the trick is destroyed and the Whale's player leads.</li>
+    <li>If both the Kraken and the White Whale land in one trick, the second one played counts.</li>
+    <li>💰 Loot: plays like an Escape. Whoever wins the trick forms an alliance with the Loot's player: if both make their bids, each gets +20.</li>
+  </ul>
   <h3>Rounds</h3>
   <p class="muted" style="margin-top:0">10 rounds; round N deals N cards. The deal passes left each round; the player left of the dealer bids first and leads.</p>
   </div>`;
@@ -540,24 +671,58 @@ function rulesSheet() {
 // ---------- actions ----------
 const actions = {
   home() { S.sheet = null; S.actingFor = null; location.hash = ''; S.setup = null; render(); },
-  new() { S.setup = { names: ['', '', '', ''], dealer: 0 }; render(); document.querySelector('[data-form=setup] input')?.focus(); },
+  new() { S.setup = { names: ['', '', '', ''], dealer: 0, scoring: 'classic', exp: {} }; render(); document.querySelector('[data-form=setup] input')?.focus(); },
   'cancel-setup'() { S.setup = null; render(); },
   'add-name'() { syncSetupInputs(); S.setup.names.push(''); render(); document.querySelector(`[data-idx="${S.setup.names.length - 1}"]`)?.focus(); },
   'rm-name'(el) { syncSetupInputs(); const i = +el.dataset.i; S.setup.names.splice(i, 1); if (S.setup.dealer >= S.setup.names.length || S.setup.dealer === i) S.setup.dealer = 0; render(); },
   'set-dealer'(el) { syncSetupInputs(); S.setup.dealer = +el.dataset.i; render(); },
+  'set-scoring'(el) { syncSetupInputs(); S.setup.scoring = el.dataset.v; render(); },
+  'toggle-exp'(el) { syncSetupInputs(); S.setup.exp[el.dataset.k] = !S.setup.exp[el.dataset.k]; render(); },
   rules() { S.sheet = { kind: 'rules' }; renderSheet(); },
   scores() { S.sheet = { kind: 'scores' }; renderSheet(); },
   menu() { S.sheet = { kind: 'menu' }; renderSheet(); },
   share() { S.sheet = { kind: 'share' }; renderSheet(); },
   close() { if (S.sheet?.kind === 'edit') delete S.drafts[`${S.sheet.r}:${S.sheet.id}`]; S.sheet = null; renderSheet(); },
-  seat(el) { S.seat = el.dataset.id; saveSeat(S.code, S.seat); render(); },
-  'change-seat'() { S.seat = null; S.actingFor = null; S.sheet = null; try { sessionStorage.removeItem(seatKey(S.code)); localStorage.removeItem(seatKey(S.code)); } catch {} render(); },
+  seat(el) {
+    const id = el.dataset.id, holder = S.game.presence?.[id];
+    if (id !== 'watch' && holder && holder !== DEVICE && !confirm(`${name(id)} is already open on another phone. Take over this seat here?`)) return;
+    S.seat = id; saveSeat(S.code, id);
+    if (id !== 'watch') { S.claimed = id; S.store.claim(S.code, id, DEVICE).catch(() => {}); }
+    render();
+  },
+  'change-seat'() {
+    const held = S.claimed;
+    S.seat = null; S.claimed = null; S.actingFor = null; S.sheet = null;
+    if (held) S.store.release(S.code, held).catch(() => {});
+    try { sessionStorage.removeItem(seatKey(S.code)); localStorage.removeItem(seatKey(S.code)); } catch {}
+    render();
+  },
+  'table-mode'() {
+    const held = S.claimed;
+    S.seat = 'watch'; S.claimed = null; S.actingFor = null; S.sheet = null; saveSeat(S.code, 'watch');
+    if (held) S.store.release(S.code, held).catch(() => {});
+    render();
+  },
+  nudge(el) {
+    update({ [`nudge/${el.dataset.id}`]: Date.now() });
+    toast(`Nudged ${name(el.dataset.id)} 🔔`);
+  },
+  cannon(el) {
+    const g = S.game, who = me();
+    if (g.phase !== 'bidding' || !who) return;
+    update({ [`cannon/${g.round}/${who}`]: el.dataset.v === '1' });
+  },
+  'edit-cannon'(el) { S.sheet.cannon = el.dataset.v === '1'; renderSheet(); },
+  destroy(el) {
+    const g = S.game, r = g.round, cur = g.destroyed?.[r] || 0;
+    update({ [`destroyed/${r}`]: Math.max(0, Math.min(2, cur + +el.dataset.d)) || null });
+  },
   'open-actfor'() { S.sheet = { kind: 'actfor' }; renderSheet(); },
   'act-as'(el) { S.actingFor = el.dataset.id; S.sheet = null; render(); window.scrollTo(0, 0); },
   'stop-acting'() { S.actingFor = null; render(); },
   async 'copy-link'() { try { await navigator.clipboard.writeText(shareURL()); toast('Link copied'); } catch { toast(shareURL()); } },
   'native-share'() { navigator.share({ title: 'Skull King', text: `Join our Skull King game: ${S.code}`, url: shareURL() }).catch(() => {}); },
-  start() { update({ phase: 'bidding', round: 1, undo: null }); },
+  start() { update({ phase: 'bidding', round: 1 }); },
   bid(el) {
     const g = S.game, r = g.round, who = me();
     if (g.phase !== 'bidding' || !who) return;
@@ -566,20 +731,21 @@ const actions = {
   },
   live(el) {
     const g = S.game, r = g.round, who = me();
-    const cur = g.live?.[r]?.[who] || 0, next = Math.max(0, Math.min(r, cur + +el.dataset.d));
-    update({ [`live/${r}/${who}`]: next });
+    const cur = g.live?.[r]?.[who] || 0, d = +el.dataset.d, next = Math.max(0, Math.min(r, cur + d));
+    // Winner of a trick leads the next one.
+    update({ [`live/${r}/${who}`]: next, ...(d > 0 ? { [`lead/${r}`]: who } : {}) });
     navigator.vibrate?.(15);
   },
   'to-results'() {
     const g = S.game;
-    update({ phase: 'results', undo: { phase: 'playing', round: g.round, label: '← Back to playing' } });
+    update(withHistory(g, { phase: 'results' }, '← Back to playing'));
   },
   'fix-bids'() { S.sheet = { kind: 'bidpick' }; renderSheet(); },
   'open-bonus'() { S.bonusOpen[`${S.game.round}:${me()}`] = true; render(); },
   draft(el) {
     const g = S.game, r = g.round, who = me(), key = `${r}:${who}`;
     const d = S.drafts[key] ||= { ...draftFor(g, r, who) };
-    const k = el.dataset.k, max = k === 'tricks' ? r : BONUS[k].max;
+    const k = el.dataset.k, max = k === 'tricks' ? tricksInRound(g, r) : BONUS[k].max;
     d[k] = Math.max(0, Math.min(max, (d[k] || 0) + +el.dataset.d));
     render();
   },
@@ -587,7 +753,7 @@ const actions = {
     const g = S.game, r = g.round, who = me(), key = `${r}:${who}`;
     const d = { ...draftFor(g, r, who) };
     const clean = { tricks: d.tricks || 0 };
-    BONUS_KEYS.forEach(k => { if (d[k]) clean[k] = d[k]; });
+    bonusKeys(g).forEach(k => { if (d[k]) clean[k] = d[k]; });
     delete S.drafts[key];
     if (S.actingFor) S.actingFor = null;
     update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
@@ -600,24 +766,22 @@ const actions = {
       patch[`results/${r}/${pid}`] = { tricks: e.tricks };
     }
     const last = r >= ROUNDS;
-    Object.assign(patch, {
-      phase: last ? 'done' : 'bidding', round: last ? r : r + 1,
-      undo: { phase: 'results', round: r, label: `↶ Undo scoring round ${r}` },
-    });
+    Object.assign(patch, { phase: last ? 'done' : 'bidding', round: last ? r : r + 1, undo: null });
+    withHistory(g, patch, `↶ Undo scoring round ${r}`);
     S.drafts = {};
     update(patch);
   },
   undo() {
-    const u = S.game.undo;
+    const u = lastUndo(S.game);
     if (!u) return;
     S.sheet = null;
-    update({ phase: u.phase, round: u.round, undo: null });
+    update({ phase: u.phase, round: u.round, ...(u.legacy ? { undo: null } : { [`history/${u.key}`]: null }) });
     toast('Undone');
   },
   edit(el) { S.sheet = { kind: 'edit', r: +el.dataset.r, id: el.dataset.id }; renderSheet(); },
   'edit-draft'(el) {
     const s = S.sheet, key = `${s.r}:${s.id}`, d = S.drafts[key];
-    const k = el.dataset.k, max = k === 'tricks' ? s.r : BONUS[k].max;
+    const k = el.dataset.k, max = k === 'tricks' ? tricksInRound(S.game, s.r) : BONUS[k].max;
     d[k] = Math.max(0, Math.min(max, (d[k] || 0) + +el.dataset.d));
     renderSheet();
   },
@@ -629,9 +793,10 @@ const actions = {
   'save-edit'() {
     const s = S.sheet, key = `${s.r}:${s.id}`, d = S.drafts[key] || {}, patch = {};
     if (s.bid != null) patch[`bids/${s.r}/${s.id}`] = s.bid;
+    if (s.cannon != null) patch[`cannon/${s.r}/${s.id}`] = s.cannon || null;
     if (!s.bidOnly) {
       const clean = { tricks: d.tricks || 0 };
-      BONUS_KEYS.forEach(k => { if (d[k]) clean[k] = d[k]; });
+      bonusKeys(S.game).forEach(k => { if (d[k]) clean[k] = d[k]; });
       patch[`results/${s.r}/${s.id}`] = clean;
     }
     delete S.drafts[key];
@@ -644,7 +809,7 @@ const actions = {
     const g = S.game, ps = sortedPlayers(g);
     const firstIdx = Math.max(0, ps.findIndex(p => p.id === g.firstDealer));
     const prevSeat = S.seat, oldCode = S.code;
-    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length);
+    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions });
     // Carry this phone's seat into the new game (same player ids p0..pN), and point the old game at it.
     const code = location.hash.slice(1);
     if (prevSeat) saveSeat(code, prevSeat);
@@ -699,7 +864,7 @@ document.addEventListener('submit', async e => {
     const dealerName = names[S.setup.dealer];
     const dealer = Math.max(0, filled.indexOf(dealerName));
     form.querySelector('button:not([type])').disabled = true;
-    try { await createGame(filled, dealer); } catch (err) { console.error(err); toast('Could not create game'); form.querySelector('button:not([type])').disabled = false; }
+    try { await createGame(filled, dealer, { scoring: S.setup.scoring, exp: S.setup.exp }); } catch (err) { console.error(err); toast('Could not create game'); form.querySelector('button:not([type])').disabled = false; }
   }
 });
 
@@ -714,10 +879,21 @@ document.addEventListener('submit', async e => {
   }
   S.store.onConnection(on => { S.online = on; if (S.game) renderTop(); });
   route();
+  cleanupOldGames();
   if ('serviceWorker' in navigator && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') navigator.serviceWorker.register('sw.js').catch(() => {});
   // Debug helper for testing highlights/chart: window.skSeed() fills a finished 10-round game.
   window.skSeed = seedFinishedGame;
 })();
+
+// Once a day, quietly delete games older than 30 days.
+function cleanupOldGames() {
+  try {
+    const last = +localStorage.getItem('sk.cleanup') || 0;
+    if (Date.now() - last < 24 * 3600 * 1000) return;
+    localStorage.setItem('sk.cleanup', Date.now());
+  } catch { return; }
+  setTimeout(() => S.store.cleanup().catch(err => console.warn('cleanup skipped', err)), 4000);
+}
 
 async function seedFinishedGame() {
   if (!S.code || !S.game) return 'open a game first';

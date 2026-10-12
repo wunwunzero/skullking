@@ -3,18 +3,31 @@
 import { firebaseConfig } from './firebase-config.js';
 
 const FB = 'https://www.gstatic.com/firebasejs/10.12.2/';
+export const OLD_GAME_MS = 30 * 24 * 3600 * 1000; // games older than this get cleaned up
 export const isLive = () => !!firebaseConfig?.databaseURL && !new URLSearchParams(location.search).has('local');
 
 export async function openStore() {
   return isLive() ? firebaseStore() : localStore();
 }
 
+const timeout = ms => new Promise(res => setTimeout(res, ms));
+
 async function firebaseStore() {
   const [{ initializeApp }, auth, db] = await Promise.all([
     import(FB + 'firebase-app.js'), import(FB + 'firebase-auth.js'), import(FB + 'firebase-database.js'),
   ]);
   const app = initializeApp(firebaseConfig);
-  await auth.signInAnonymously(auth.getAuth(app));
+  const a = auth.getAuth(app);
+  // Reuse the saved anonymous user; only sign in fresh when there is none. On a weak
+  // connection don't block the app — keep retrying in the background.
+  const signedIn = new Promise(res => {
+    const stop = auth.onAuthStateChanged(a, u => { if (u) { stop(); res(u); } });
+  });
+  const trySignIn = () => { if (!a.currentUser) auth.signInAnonymously(a).catch(() => setTimeout(trySignIn, 5000)); };
+  await a.authStateReady?.();
+  trySignIn();
+  await Promise.race([signedIn, timeout(6000)]);
+
   const database = db.getDatabase(app);
   const gref = (code, path = '') => db.ref(database, `games/${code}${path ? '/' + path : ''}`);
   let connected = true, onConn = null;
@@ -24,9 +37,35 @@ async function firebaseStore() {
     onConnection(fn) { onConn = fn; fn(connected); },
     async exists(code) { return (await db.get(gref(code, 'createdAt'))).exists(); },
     async create(code, game) { await db.set(gref(code), game); },
-    subscribe(code, cb) { return db.onValue(gref(code), s => cb(s.val())); },
+    subscribe(code, cb) {
+      let off = () => {};
+      // Wait for sign-in so the first read isn't rejected by the rules.
+      signedIn.then(() => { off = db.onValue(gref(code), s => cb(s.val()), () => cb(null)); });
+      return () => off();
+    },
     // Multi-path update relative to the game: {'bids/3/p1': 2, phase: 'playing'}; null deletes.
     update(code, patch) { return db.update(gref(code), patch); },
+    // Mark this device as holding a seat; Firebase clears it if the phone drops off.
+    async claim(code, pid, device) {
+      const r = gref(code, `presence/${pid}`);
+      await db.onDisconnect(r).remove();
+      await db.set(r, device);
+    },
+    async release(code, pid) {
+      const r = gref(code, `presence/${pid}`);
+      await db.onDisconnect(r).cancel();
+      await db.remove(r);
+    },
+    // Delete games older than 30 days (rules only allow this query and these deletes).
+    async cleanup() {
+      const cutoff = Date.now() - OLD_GAME_MS - 60000;
+      const q = db.query(db.ref(database, 'games'), db.orderByChild('createdAt'), db.endAt(cutoff), db.limitToFirst(25));
+      const snap = await db.get(q);
+      const dels = [];
+      snap.forEach(c => { dels.push(db.remove(c.ref)); });
+      await Promise.all(dels);
+      return dels.length;
+    },
   };
 }
 
@@ -46,7 +85,7 @@ function localStore() {
     if (val === null || val === undefined) delete o[last]; else o[last] = structuredClone(val);
   };
   const write = (code, fn) => { const g = all(); fn(g); save(g); emit(code); chan?.postMessage(code); };
-  return {
+  const store = {
     live: false,
     onConnection(fn) { fn(true); },
     async exists(code) { return !!all()[code]; },
@@ -59,5 +98,19 @@ function localStore() {
     async update(code, patch) {
       write(code, g => { if (!g[code]) return; for (const [p, v] of Object.entries(patch)) setPath(g[code], p, v); });
     },
+    async claim(code, pid, device) {
+      await store.update(code, { [`presence/${pid}`]: device });
+      // No server to notice a closed tab, so release on the way out.
+      addEventListener('pagehide', () => store.update(code, { [`presence/${pid}`]: null }), { once: true });
+    },
+    async release(code, pid) { await store.update(code, { [`presence/${pid}`]: null }); },
+    async cleanup() {
+      const g = all(), cutoff = Date.now() - OLD_GAME_MS;
+      const old = Object.keys(g).filter(c => (g[c]?.createdAt || 0) < cutoff);
+      old.forEach(c => delete g[c]);
+      save(g);
+      return old.length;
+    },
   };
+  return store;
 }
