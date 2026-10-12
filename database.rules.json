@@ -19,6 +19,7 @@
           ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
         },
         "firstDealer": { ".validate": "newData.isString() && newData.val().matches(/^p[0-7]$/)" },
+        "champion": { ".validate": "newData.isString() && newData.val().matches(/^p[0-7]$/)" },
         "scoring": { ".validate": "newData.isString() && newData.val().matches(/^(classic|rascal)$/)" },
         "expansions": {
           "kraken": { ".validate": "newData.isBoolean()" },
@@ -35,6 +36,10 @@
             ".validate": "$pid.matches(/^p[0-7]$/) && newData.hasChildren(['name', 'order'])",
             "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
             "order": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
+            "avatar": {
+              ".write": "auth != null && root.child('games').child($code).exists()",
+              ".validate": "newData.isString() && newData.val().matches(/^(captain|deckhand|gunner|parrot|coralia|pearl|kraken|whale|crab|skullking)$/)"
+            },
             "$other": { ".validate": false }
           }
         },

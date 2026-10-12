@@ -1,4 +1,5 @@
 import { openStore, OLD_GAME_MS } from './store.js';
+import { CREW, CREW_IDS, spriteSVG, spriteRects } from './avatars.js';
 import {
   ROUNDS, BONUS, bonusKeys, roundScore, scoreFor, sortedPlayers, dealerFor, leaderFor, totals, ranking,
   autoFillTricks, liveStatus, roundHighlights, gameHighlights, tricksInRound, bidHint,
@@ -45,11 +46,20 @@ const S = {
 
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const name = id => S.game?.players?.[id]?.name || '?';
-const color = id => COLORS[(S.game?.players?.[id]?.order ?? 0) % COLORS.length];
+// A player's chosen crew character (null until they pick one; flags stand in until then).
+const avatarOf = id => { const a = S.game?.players?.[id]?.avatar; return CREW[a] ? a : null; };
+const color = id => avatarOf(id) ? CREW[avatarOf(id)].color : COLORS[(S.game?.players?.[id]?.order ?? 0) % COLORS.length];
 const signed = n => (n > 0 ? '+' : n < 0 ? '−' : '') + Math.abs(n);
 const icon = (id, cls = '') => `<svg class="ico ${cls}" aria-hidden="true"><use href="#i-${id}"/></svg>`;
 const flagFor = order => `<svg class="flag" viewBox="0 0 18 13" aria-hidden="true">${FLAG_PATTERNS[order % 8](COLORS[order % 8])}</svg>`;
-const flag = id => flagFor(S.game?.players?.[id]?.order ?? 0);
+const avatarTile = (a, cls = '') => `<span class="flag ava ${cls}" style="--crew:${CREW[a].color}">${spriteSVG(a)}</span>`;
+const flag = id => { const a = avatarOf(id); return a ? avatarTile(a) : flagFor(S.game?.players?.[id]?.order ?? 0); };
+// For nesting inside an SVG (chart line ends).
+const markSVG = (id, x, y, size) => {
+  const a = avatarOf(id), o = S.game.players[id].order % 8;
+  return a ? `<svg x="${x}" y="${y}" width="${size}" height="${size}" viewBox="0 0 16 16" shape-rendering="crispEdges">${spriteRects(a)}</svg>`
+    : `<svg x="${x}" y="${y + 2}" width="${size}" height="${size * 13 / 18}" viewBox="0 0 18 13">${FLAG_PATTERNS[o](COLORS[o])}</svg>`;
+};
 const mark = (cls = 'mark') => `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-mark"/></svg>`;
 const me = () => S.actingFor || (S.seat && S.seat !== 'watch' ? S.seat : null);
 
@@ -241,6 +251,7 @@ function render() {
       <button class="btn primary" data-act="home">Back</button></div>`;
   }
   else if (!S.seat) { $app.innerHTML = seatView(); }
+  else if (S.seat !== 'watch' && S.game.players?.[S.seat] && (S.picking || (!avatarOf(S.seat) && !S.skipPick?.[S.code]))) { $app.innerHTML = crewView(); }
   else {
     const g = S.game;
     $app.innerHTML = (S.actingFor ? actingBanner() : '') + ({
@@ -343,7 +354,7 @@ function setupView() {
   <form data-form="setup">
     ${names.map((n, i) => `
       <div class="name-row">
-        ${flagFor(i)}
+        <span class="seatno">${i + 1}</span>
         <input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="Player ${i + 1}" autocomplete="off" data-idx="${i}">
         <button type="button" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">Deals</button>
         ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="Remove player ${i + 1}">${icon('close')}</button>` : ''}
@@ -371,8 +382,9 @@ async function createGame(names, dealer, opts = {}) {
     if (!(await S.store.exists(code))) break;
   }
   const players = {};
-  names.forEach((n, i) => { players['p' + i] = { name: n, order: i }; });
+  names.forEach((n, i) => { players['p' + i] = { name: n, order: i, ...(opts.avatars?.['p' + i] ? { avatar: opts.avatars['p' + i] } : {}) }; });
   const game = { createdAt: Date.now(), phase: 'lobby', round: 1, firstDealer: 'p' + dealer, players, scoring: opts.scoring || 'classic' };
+  if (opts.champion) game.champion = opts.champion;
   const exp = Object.fromEntries(Object.entries(opts.exp || {}).filter(([, v]) => v));
   if (Object.keys(exp).length) game.expansions = exp;
   await S.store.create(code, game);
@@ -396,6 +408,26 @@ function seatView() {
   </div>`;
 }
 
+// ---------- crew picker ----------
+function crewView() {
+  const g = S.game, seat = S.seat, mine = avatarOf(seat);
+  const takenBy = {};
+  for (const [pid, p] of Object.entries(g.players)) if (pid !== seat && CREW[p.avatar]) takenBy[p.avatar] = p.name;
+  const champ = g.champion === seat;
+  return `
+  <h2 style="margin-top:24px">Pick your character</h2>
+  <p class="muted small" style="margin-top:0">${esc(name(seat))}, this is how the crew will see you on the scoreboard.${champ ? ' You won the last game, so the Skull King is yours to claim.' : ''}</p>
+  <div class="crew-grid">
+    ${CREW_IDS.map(id => {
+      const c = CREW[id], who = takenBy[id], locked = c.earned && !champ;
+      const why = who ? `Taken by ${esc(who)}` : locked ? 'Last winner only' : '';
+      return `<button class="crew-pick ${mine === id ? 'on' : ''}" data-act="pick-crew" data-c="${id}" ${who || locked ? 'disabled' : ''} aria-pressed="${mine === id}">
+        ${avatarTile(id, 'big')}<b>${esc(c.name)}</b>${why ? `<small>${why}</small>` : ''}</button>`;
+    }).join('')}
+  </div>
+  ${mine ? `<button class="btn" style="margin-top:14px" data-act="crew-done">Keep ${esc(CREW[mine].name)}</button>` : `<button class="link" data-act="crew-skip">Skip for now (use a flag)</button>`}`;
+}
+
 function roleBadges(g, r, pid) {
   // House rule: the player after the dealer leads every trick of the round.
   return (dealerFor(g, r) === pid ? '<span class="badge">dealer</span>' : '')
@@ -415,7 +447,11 @@ function actingBanner() {
 function shareURL() { return `${location.origin}${location.pathname}#${S.code}`; }
 function lobbyView(g) {
   const ps = sortedPlayers(g);
+  const champ = g.champion && g.players[g.champion];
   return `
+  ${champ ? `<div class="card scored nailed"><div class="outcome">${icon('crown', 'crownmark')}<div class="what">${esc(champ.name)} won the last game
+    <small>${g.champion === S.seat ? 'The Skull King is unlocked for you this game.' : 'Only they can sail as the Skull King this game.'}</small></div>
+    ${g.champion === S.seat && avatarOf(S.seat) !== 'skullking' ? `<button class="btn" style="width:auto;margin-left:auto" data-act="pick-crew" data-c="skullking">${avatarTile('skullking')}Claim</button>` : ''}</div></div>` : ''}
   <div class="card share">
     <p class="muted small" style="margin:0">Scan or open the link, then pick your name</p>
     <div class="big-code">${esc(S.code)}</div>
@@ -736,17 +772,17 @@ function chartSVG(g) {
     const o = p.order % 8, run = [0, ...t[p.id].running];
     const pts = run.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
     const ex = x(run.length - 1), ey = y(run[run.length - 1]);
-    return `<polyline points="${pts}" fill="none" stroke="${COLORS[o]}" stroke-width="2.25" stroke-dasharray="${DASHES[o]}" stroke-linejoin="round" stroke-linecap="round"/>
-      <svg x="${(ex + 4).toFixed(1)}" y="${(ey - 5).toFixed(1)}" width="14" height="10" viewBox="0 0 18 13">${FLAG_PATTERNS[o](COLORS[o])}</svg>`;
+    return `<polyline points="${pts}" fill="none" stroke="${color(p.id)}" stroke-width="2.25" stroke-dasharray="${DASHES[o]}" stroke-linejoin="round" stroke-linecap="round"/>
+      ${markSVG(p.id, +(ex + 3).toFixed(1), +(ey - 7).toFixed(1), 14)}`;
   }).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Running totals by round: ${esc(ranking(g).map(r => `${r.name} ${r.total}`).join(', '))}">${grid}${lines}</svg>
-    <div class="legend">${ps.map(p => `<span><svg class="dash" viewBox="0 0 24 4" aria-hidden="true"><line x1="1" y1="2" x2="23" y2="2" stroke="${COLORS[p.order % 8]}" stroke-width="2.25" stroke-dasharray="${DASHES[p.order % 8]}" stroke-linecap="round"/></svg>${flag(p.id)}${esc(p.name)}</span>`).join('')}</div>`;
+    <div class="legend">${ps.map(p => `<span><svg class="dash" viewBox="0 0 24 4" aria-hidden="true"><line x1="1" y1="2" x2="23" y2="2" stroke="${color(p.id)}" stroke-width="2.25" stroke-dasharray="${DASHES[p.order % 8]}" stroke-linecap="round"/></svg>${flag(p.id)}${esc(p.name)}</span>`).join('')}</div>`;
 }
 
 function doneView(g) {
   const rank = ranking(g), lines = gameHighlights(g, name);
   const tops = rank.filter(r => r.place === 1);
-  const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}<svg class="flag" viewBox="0 0 18 13" aria-hidden="true">${FLAG_PATTERNS[g.players[r.id].order % 8](COLORS[g.players[r.id].order % 8])}</svg></span>`).join('');
+  const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}${flag(r.id)}</span>`).join('');
   return `
   <section class="winner ${S.finalAnim ? 'arrive' : ''}">
     <div class="hero-flags">${mark('mark')}${hero}</div>
@@ -825,6 +861,7 @@ function menuSheet() {
     <button data-act="share">${icon('share')}Invite players (code &amp; QR)</button>
     <button data-act="rules">${icon('book')}Rules &amp; scoring</button>
     ${u ? `<button data-act="undo">${icon('undo')}${esc(u.label.replace(/^[↶←]\s*/, ''))}</button>` : ''}
+    ${S.seat !== 'watch' ? `<button data-act="change-crew">${avatarOf(S.seat) ? avatarTile(avatarOf(S.seat), 'menu-ava') : icon('users')}Change character</button>` : ''}
     <button data-act="change-seat">${icon('swap')}Switch player on this phone</button>
     ${S.seat !== 'watch' ? `<button data-act="table-mode">${icon('screen')}Use as the table scoreboard</button>` : ''}
     <button data-act="home">${icon('exit')}Leave game (it keeps going)</button>
@@ -946,6 +983,15 @@ const actions = {
   'native-share'() { navigator.share({ title: 'Skull King', text: `Join our Skull King game: ${S.code}`, url: shareURL() }).catch(() => {}); },
   start() { update({ phase: 'bidding', round: 1 }); },
   noop() {},
+  'pick-crew'(el) {
+    const id = el.dataset.c;
+    S.picking = false;
+    update({ [`players/${S.seat}/avatar`]: id });
+    toast(`Welcome aboard, ${CREW[id].name}`);
+  },
+  'crew-done'() { S.picking = false; render(); },
+  'crew-skip'() { (S.skipPick ||= {})[S.code] = true; S.picking = false; render(); },
+  'change-crew'() { S.sheet = null; S.picking = true; render(); window.scrollTo(0, 0); },
   'change-bid'() { S.changing = true; render(); document.querySelector('[data-act="bid"].on')?.focus(); },
   bid(el) {
     const g = S.game, r = g.round, who = me();
@@ -1034,7 +1080,10 @@ const actions = {
     const g = S.game, ps = sortedPlayers(g);
     const firstIdx = Math.max(0, ps.findIndex(p => p.id === g.firstDealer));
     const prevSeat = S.seat, oldCode = S.code;
-    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions });
+    const champion = ranking(g)[0].id;
+    // Characters carry over; the Skull King is only kept by the new champion.
+    const avatars = Object.fromEntries(ps.map(p => [p.id, p.avatar]).filter(([pid, a]) => CREW[a] && (a !== 'skullking' || pid === champion)));
+    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions, champion, avatars });
     // Carry this phone's seat into the new game (same player ids p0..pN), and point the old game at it.
     const code = location.hash.slice(1);
     if (prevSeat) saveSeat(code, prevSeat);
