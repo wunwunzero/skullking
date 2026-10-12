@@ -237,7 +237,7 @@ function focusKey() {
   const a = document.activeElement;
   if (!a || a === document.body || !a.dataset) return null;
   const d = a.dataset;
-  return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}` : null;
+  return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}${d.c ? `[data-c="${d.c}"]` : ''}` : null;
 }
 
 function render() {

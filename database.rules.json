@@ -38,7 +38,7 @@
             "order": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
             "avatar": {
               ".write": "auth != null && root.child('games').child($code).exists()",
-              ".validate": "newData.isString() && newData.val().matches(/^(captain|deckhand|gunner|parrot|coralia|pearl|kraken|whale|crab|skullking)$/)"
+              ".validate": "newData.isString() && newData.val().matches(/^(captain|deckhand|gunner|parrot|coralia|pearl|kraken|whale|crab|cook|quartermaster|lookout|ladycaptain|tigress|escape|loot|ghost|skeleton|witch|skullking)$/)"
             },
             "$other": { ".validate": false }
           }
