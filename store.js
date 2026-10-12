@@ -56,16 +56,8 @@ async function firebaseStore() {
       await db.onDisconnect(r).cancel();
       await db.remove(r);
     },
-    // Delete games older than 30 days (rules only allow this query and these deletes).
-    async cleanup() {
-      const cutoff = Date.now() - OLD_GAME_MS - 60000;
-      const q = db.query(db.ref(database, 'games'), db.orderByChild('createdAt'), db.endAt(cutoff), db.limitToFirst(25));
-      const snap = await db.get(q);
-      const dels = [];
-      snap.forEach(c => { dels.push(db.remove(c.ref)); });
-      await Promise.all(dels);
-      return dels.length;
-    },
+    // Delete one game; the rules only allow this once it is 30+ days old.
+    async remove(code) { await db.remove(gref(code)); },
   };
 }
 
@@ -104,13 +96,7 @@ function localStore() {
       addEventListener('pagehide', () => store.update(code, { [`presence/${pid}`]: null }), { once: true });
     },
     async release(code, pid) { await store.update(code, { [`presence/${pid}`]: null }); },
-    async cleanup() {
-      const g = all(), cutoff = Date.now() - OLD_GAME_MS;
-      const old = Object.keys(g).filter(c => (g[c]?.createdAt || 0) < cutoff);
-      old.forEach(c => delete g[c]);
-      save(g);
-      return old.length;
-    },
+    async remove(code) { write(code, g => { delete g[code]; }); },
   };
   return store;
 }

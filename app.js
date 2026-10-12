@@ -1,4 +1,4 @@
-import { openStore } from './store.js';
+import { openStore, OLD_GAME_MS } from './store.js';
 import {
   ROUNDS, BONUS, bonusKeys, roundScore, scoreFor, sortedPlayers, dealerFor, leaderFor, leadNext, totals, ranking,
   autoFillTricks, liveStatus, roundHighlights, gameHighlights, tricksInRound, bidHint,
@@ -274,6 +274,7 @@ async function createGame(names, dealer, opts = {}) {
   const exp = Object.fromEntries(Object.entries(opts.exp || {}).filter(([, v]) => v));
   if (Object.keys(exp).length) game.expansions = exp;
   await S.store.create(code, game);
+  rememberCreated(code, game.createdAt);
   S.setup = null;
   location.hash = code;
 }
@@ -885,14 +886,34 @@ document.addEventListener('submit', async e => {
   window.skSeed = seedFinishedGame;
 })();
 
-// Once a day, quietly delete games older than 30 days.
+// Each phone remembers the games it created and deletes them once they're 30+ days old
+// (checked once a day). The database rules refuse to delete anything newer.
+const CREATED_KEY = 'sk.created';
+function rememberCreated(code, createdAt) {
+  try {
+    const list = JSON.parse(localStorage.getItem(CREATED_KEY) || '[]');
+    list.push({ code, createdAt });
+    localStorage.setItem(CREATED_KEY, JSON.stringify(list.slice(-200)));
+  } catch {}
+}
 function cleanupOldGames() {
+  let list;
   try {
     const last = +localStorage.getItem('sk.cleanup') || 0;
     if (Date.now() - last < 24 * 3600 * 1000) return;
     localStorage.setItem('sk.cleanup', Date.now());
+    list = JSON.parse(localStorage.getItem(CREATED_KEY) || '[]');
   } catch { return; }
-  setTimeout(() => S.store.cleanup().catch(err => console.warn('cleanup skipped', err)), 4000);
+  const cutoff = Date.now() - OLD_GAME_MS - 3600 * 1000;
+  const old = list.filter(g => g.createdAt < cutoff);
+  if (!old.length) return;
+  setTimeout(async () => {
+    const done = new Set();
+    for (const g of old) {
+      try { await S.store.remove(g.code); done.add(g.code); } catch (err) { console.warn('cleanup skipped', g.code, err); }
+    }
+    try { localStorage.setItem(CREATED_KEY, JSON.stringify(list.filter(g => !done.has(g.code)))); } catch {}
+  }, 4000);
 }
 
 async function seedFinishedGame() {
