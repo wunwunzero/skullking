@@ -447,7 +447,7 @@ button.chip.nudge::after { content: ''; position: absolute; inset: -6px -4px; }
 .standings .band.b1 { background: var(--tint-2); border-left: 0; }
 .standings .band.b2 { background: var(--tint); }
 .standings .band.b3 { background: transparent; }
-.standings .water-label { position: absolute; top: 4px; font-size: .68rem; font-style: italic; letter-spacing: .04em; color: var(--ink-3); z-index: 0; }
+.standings .water-label { position: absolute; top: 4px; font-size: .68rem; font-style: italic; letter-spacing: .04em; color: var(--ink-2); z-index: 0; }
 .standings .water-label.shoal { left: 6px; }
 .standings .water-label.deep { right: 4px; }
 .standings .lanes { padding-top: 18px; box-sizing: content-box; }
