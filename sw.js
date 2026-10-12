@@ -1,5 +1,5 @@
 // Network-first service worker: the app shell loads offline; game data syncs through Firebase.
-const CACHE = 'sk-v1';
+const CACHE = 'sk-v2';
 const ASSETS = ['./', './index.html', './app.js', './store.js', './scoring.js', './firebase-config.js', './styles.css', './manifest.webmanifest', './icon.svg', './icon-192.png', './apple-touch-icon.png'];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS)).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
