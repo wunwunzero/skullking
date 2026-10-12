@@ -1,6 +1,6 @@
 import { openStore, OLD_GAME_MS } from './store.js';
 import {
-  ROUNDS, BONUS, bonusKeys, roundScore, scoreFor, sortedPlayers, dealerFor, leaderFor, leadNext, totals, ranking,
+  ROUNDS, BONUS, bonusKeys, roundScore, scoreFor, sortedPlayers, dealerFor, leaderFor, totals, ranking,
   autoFillTricks, liveStatus, roundHighlights, gameHighlights, tricksInRound, bidHint,
 } from './scoring.js';
 
@@ -295,9 +295,9 @@ function seatView() {
 }
 
 function roleBadges(g, r, pid) {
-  const leader = g.phase === 'playing' ? leadNext(g, r) : leaderFor(g, r);
+  // House rule: the player after the dealer leads every trick of the round.
   return (dealerFor(g, r) === pid ? '<span class="badge">dealer</span>' : '')
-    + (leader === pid ? `<span class="badge lead">${g.phase === 'playing' ? '▶ leads next' : 'leads'}</span>` : '');
+    + (leaderFor(g, r) === pid ? '<span class="badge lead">leads</span>' : '');
 }
 
 function rulesLine(g) {
@@ -665,7 +665,7 @@ function rulesSheet() {
     <li>💰 Loot: plays like an Escape. Whoever wins the trick forms an alliance with the Loot's player: if both make their bids, each gets +20.</li>
   </ul>
   <h3>Rounds</h3>
-  <p class="muted" style="margin-top:0">10 rounds; round N deals N cards. The deal passes left each round; the player left of the dealer bids first and leads.</p>
+  <p class="muted" style="margin-top:0">10 rounds; round N deals N cards. The deal passes left each round. House rule: the player after the dealer leads every trick of the round.</p>
   </div>`;
 }
 
@@ -732,9 +732,8 @@ const actions = {
   },
   live(el) {
     const g = S.game, r = g.round, who = me();
-    const cur = g.live?.[r]?.[who] || 0, d = +el.dataset.d, next = Math.max(0, Math.min(r, cur + d));
-    // Winner of a trick leads the next one.
-    update({ [`live/${r}/${who}`]: next, ...(d > 0 ? { [`lead/${r}`]: who } : {}) });
+    const cur = g.live?.[r]?.[who] || 0, next = Math.max(0, Math.min(r, cur + +el.dataset.d));
+    update({ [`live/${r}/${who}`]: next });
     navigator.vibrate?.(15);
   },
   'to-results'() {

@@ -47,9 +47,6 @@ export function scoreFor(game, round, pid, res = game.results?.[round]?.[pid]) {
 // Tricks a round actually awards (Kraken / White Whale can destroy tricks).
 export const tricksInRound = (game, round) => round - (game.destroyed?.[round] || 0);
 
-// Who leads the next trick: last trick's winner, else the player after the dealer.
-export const leadNext = (game, round) => game.lead?.[round] || leaderFor(game, round);
-
 // Table talk about the bid total vs tricks available.
 export function bidHint(game, round) {
   const bids = Object.values(game.bids?.[round] || {});

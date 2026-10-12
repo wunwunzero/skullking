@@ -90,7 +90,7 @@ test('highlights', () => {
   assert.ok(g.some(l => l.includes('Biggest round: Ben +60 in round 3')));
 });
 
-import { scoreFor, bidHint, tricksInRound, leadNext, bonusKeys } from '../scoring.js';
+import { scoreFor, bidHint, tricksInRound, bonusKeys } from '../scoring.js';
 
 test('rascal: full, half when off by one, zero beyond', () => {
   const o = { mode: 'rascal' };
@@ -128,9 +128,7 @@ test('destroyed tricks shrink the round and auto-fill', () => {
   assert.deepEqual(autoFillTricks(g, 4), { id: 'b', tricks: 1 });
 });
 
-test('lead next and bid hints', () => {
-  assert.equal(leadNext(game, 1), 'c');
-  assert.equal(leadNext({ ...game, lead: { 1: 'a' } }, 1), 'a');
+test('bid hints', () => {
   assert.match(bidHint({ bids: { 5: { a: 3, b: 3 } } }, 5), /going down/);
   assert.match(bidHint({ bids: { 5: { a: 1, b: 2 } } }, 5), /2 spare tricks/);
   assert.match(bidHint({ bids: { 5: { a: 2, b: 3 } } }, 5), /exactly 5/);
