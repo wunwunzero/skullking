@@ -1,0 +1,74 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "games": {
+      "$code": {
+        ".read": "auth != null && $code.matches(/^[A-HJ-NP-Z]{4}$/)",
+        ".write": "auth != null && $code.matches(/^[A-HJ-NP-Z]{4}$/) && !data.exists() && newData.exists()",
+        ".validate": "newData.hasChildren(['createdAt', 'phase', 'round', 'players'])",
+        "createdAt": { ".validate": "newData.isNumber()" },
+        "phase": {
+          ".write": "auth != null && data.exists()",
+          ".validate": "newData.isString() && newData.val().matches(/^(lobby|bidding|playing|results|done)$/)"
+        },
+        "round": {
+          ".write": "auth != null && data.exists()",
+          ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
+        },
+        "firstDealer": { ".validate": "newData.isString() && newData.val().matches(/^p[0-7]$/)" },
+        "next": {
+          ".write": "auth != null && data.parent().exists()",
+          ".validate": "newData.isString() && newData.val().matches(/^[A-HJ-NP-Z]{4}$/)"
+        },
+        "players": {
+          "$pid": {
+            ".validate": "$pid.matches(/^p[0-7]$/) && newData.hasChildren(['name', 'order'])",
+            "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
+            "order": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
+            "$other": { ".validate": false }
+          }
+        },
+        "undo": {
+          ".write": "auth != null && data.parent().exists()",
+          ".validate": "newData.hasChildren(['phase', 'round', 'label'])",
+          "phase": { ".validate": "newData.isString() && newData.val().matches(/^(playing|results)$/)" },
+          "round": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+          "label": { ".validate": "newData.isString() && newData.val().length <= 60" },
+          "$other": { ".validate": false }
+        },
+        "bids": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": {
+            ".validate": "$r.matches(/^([1-9]|10)$/)",
+            "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" }
+          }
+        },
+        "live": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": {
+            ".validate": "$r.matches(/^([1-9]|10)$/)",
+            "$pid": { ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" }
+          }
+        },
+        "results": {
+          ".write": "auth != null && data.parent().exists()",
+          "$r": {
+            ".validate": "$r.matches(/^([1-9]|10)$/)",
+            "$pid": {
+              ".validate": "$pid.matches(/^p[0-7]$/) && newData.hasChild('tricks')",
+              "tricks": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 10" },
+              "std14": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 3" },
+              "black14": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" },
+              "mermaids": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 2" },
+              "pirates": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 5" },
+              "skullKing": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1" },
+              "$other": { ".validate": false }
+            }
+          }
+        },
+        "$other": { ".validate": false }
+      }
+    }
+  }
+}
