@@ -478,7 +478,8 @@ function standingsLine(g) {
   let ticks = '';
   for (let v = lo; v <= hi; v += step) ticks += `<span class="tick ${v === 0 ? 'zero' : ''}" style="left:${pos(v)}%">${v}</span>`;
   // Depth bands: shoal water at the low end, open water toward the leader.
-  const bands = [1, 2, 3].map(i => `<span class="band b${i}" style="left:${((i - 1) / 3) * 100}%"></span>`).join('');
+  const bands = [1, 2, 3].map(i => `<span class="band b${i}" style="left:${((i - 1) / 3) * 100}%" aria-hidden="true"></span>`).join('')
+    + '<span class="water-label shoal" aria-hidden="true">shallows</span><span class="water-label deep" aria-hidden="true">deep water</span>';
   const markers = L.placed.map(({ p, x, lane }) => {
     const lead = scored && t[p.id].total === top && top > 0;
     const d = showDelta ? t[p.id].rounds[S.deltaRound] : null;
@@ -602,6 +603,7 @@ function playingView(g) {
   return `
   ${standingsLine(g)}
   <div class="card ${mine && !done ? 'action' : ''} play-card">
+    ${watch ? `<div class="progress" style="margin-bottom:12px"><span class="muted">Tricks played</span><b>${played}<span> / ${r}</span></b></div>` : ''}
     ${strip}
     ${hint ? `<p class="verdict ${played === 0 ? 'loud' : ''}">${icon(hint.icon, played === 0 ? '' : 'sm')}<span>${esc(hint.text)}</span></p>` : ''}
     ${mine ? `<div class="mine-line"><span class="muted">${S.actingFor ? esc(name(mine)) + "'s" : 'Your'} tricks</span>
@@ -610,7 +612,8 @@ function playingView(g) {
       <button class="btn minus" data-act="live" data-d="-1" ${myGot <= 0 ? 'disabled' : ''} aria-label="Remove a trick">${icon('minus')}</button>
       <button class="btn primary plus" data-act="live" data-d="1" ${done ? 'disabled' : ''}>${icon('plus')}${S.actingFor ? esc(name(mine)) : 'I'} won a trick</button>
     </div>` : ''}
-    <p class="table-line small muted">Table: <b class="sounding">${played}</b> of ${r} trick${r > 1 ? 's' : ''} played · ${esc(name(leaderFor(g, r)))} leads every trick</p>
+    ${watch ? `<p class="table-line small muted">${esc(name(leaderFor(g, r)))} leads every trick</p>`
+      : `<p class="table-line small muted">Table: <b class="sounding">${played}</b> of ${r} trick${r > 1 ? 's' : ''} played · ${esc(name(leaderFor(g, r)))} leads every trick</p>`}
   </div>
   ${canDestroy && !watch ? `<div class="card quiet destroy"><span class="small">${icon('kraken', 'sm')}Destroyed by Kraken / White Whale: <b class="sounding">${destroyed}</b></span>
     <span><button class="icon-btn outline" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="One fewer destroyed trick">${icon('minus')}</button>
@@ -746,7 +749,7 @@ function doneView(g) {
   const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}<svg class="flag" viewBox="0 0 18 13" aria-hidden="true">${FLAG_PATTERNS[g.players[r.id].order % 8](COLORS[g.players[r.id].order % 8])}</svg></span>`).join('');
   return `
   <section class="winner ${S.finalAnim ? 'arrive' : ''}">
-    <div class="hero-flags">${hero}</div>
+    <div class="hero-flags">${mark('mark')}${hero}</div>
     <h1>${tops.map(r => esc(r.name)).join(' & ')} win${tops.length > 1 ? '' : 's'}</h1>
     <p class="final-total"><b data-count="${tops[0].total}" data-key="${S.code}:final">${signed(tops[0].total)}</b> after 10 rounds · ${esc(rulesLine(g))}</p>
   </section>
