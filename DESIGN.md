@@ -456,6 +456,20 @@ On the results screen, a sticky bar pinned to the bottom edge, full-bleed across
 A nailed bid turns the result card brass (brass-fill border, brass big score), and the score counts up over 900ms with a quartic ease-out; the card's mark springs in (`crownin`, .9s overshoot). A miss shows its score in miss red. On the final screen the crownless skull mark sits beside the winner's tile, which rises (1s) with its brass crown following .5s later; the podium winner's place (1.3rem) and total are set in brass, and the "voyage" chart draws each player's line in their character's colour with their seat's dash pattern, ending on their character sprite (or flag).
 - **Personal end line:** directly under the winner, every player gets their own card: their 40px tile, "You won the voyage" or "You finished Nth" at 1.05rem bold, and a sub-line with their best round (signed, with its round number) and bids made out of rounds played.
 
+- **Awards:** a card on the final screen gives every player one title (Sharpshooter, Kraken Bait, Zero Hero…), listed in final order: 34px tile, the title in bold (magenta for you), and a sub-line with the player's name and the stat that earned it. Your own title also appears in your personal end line with its icon.
+
+### Drumroll
+When the last bid lands, the reveal strip shows every cell face down (a muted "?") shivering for 1.1s (`shiver`, ±1.2° with a 40ms stagger) under a synthesised snare roll, then flips as above with the chime. Reduced motion skips the wait. A nailed bid is celebrated with a short rising fanfare and a buzz pattern; sound and vibration share one per-phone switch in the menu.
+
+### Cheat Card ("What beats what")
+A sheet opened from a cards icon in the header during bidding and play (and from the menu). A ladder in one hairline-ruled surface, strongest first: each rung has a 40px crew tile or suit swatch, a bold card name and a one-line Ink 2 rule. Suits are small upright cards (black with an outline, then a fanned yellow/purple/green stack). Under it, a tinted "twist" panel shows the Skull King → Pirate → Mermaid → Skull King cycle as tiles joined by small arrows labelled "beats", and checked notes for Tigress, ties and any expansion cards in play.
+
+### Crew Changes
+A "Players" sheet (menu, or a link in the lobby) lists everyone at the table with a quiet underlined Remove (or Keep, for someone leaving after this round) and status chips ("Joins round 5", "Leaves after this round"), then an add form: name field, a "Sits after" select and the primary button. A player who joins mid-round sees a quiet card with their tile: "You join from round N". Someone who left keeps their score; the podium notes "Left after round N" under their name.
+
+### Language and Updates
+Each phone picks English, 中文 or Bahasa Melayu from pill buttons written in their own language (home screen and menu); Chinese falls back to the system CJK face. When a new version is published, a quiet strip at the top of the page offers "A new version is ready · Refresh" instead of a popup.
+
 ### Toast
 A solid ink bar with 12px corners that slides up from the bottom (.35s) with an underlined inline action. It carries the overlay shadow.
 

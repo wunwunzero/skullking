@@ -33,9 +33,18 @@
         },
         "players": {
           "$pid": {
+            ".write": "auth != null && !data.exists() && root.child('games').child($code).exists()",
             ".validate": "$pid.matches(/^p[0-7]$/) && newData.hasChildren(['name', 'order'])",
             "name": { ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24" },
-            "order": { ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7" },
+            "order": {
+              ".write": "auth != null && data.exists()",
+              ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 7"
+            },
+            "from": { ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10" },
+            "left": {
+              ".write": "auth != null && data.parent().exists()",
+              ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 11"
+            },
             "avatar": {
               ".write": "auth != null && root.child('games').child($code).exists()",
               ".validate": "newData.isString() && newData.val().matches(/^(captain|deckhand|gunner|parrot|coralia|pearl|kraken|whale|crab|cook|quartermaster|lookout|ladycaptain|tigress|escape|loot|ghost|skeleton|witch|skullking)$/)"

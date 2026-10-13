@@ -618,3 +618,87 @@ h2.t3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; letter-spacing
 .standings.compact { --lane-h: 40px; --lane-n: 40; }
 .standings.compact .lanes { padding-top: 14px; }
 .standings.compact .water-label { top: 2px; }
+
+/* ---------- round 3: languages, sound, cheat card, awards, crew changes ---------- */
+/* Update ready: a quiet strip at the top of the page, not a popup over the game. */
+.update-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 8px 0 12px; padding: 8px 8px 8px 14px;
+  border-radius: 14px; border: var(--hair) solid var(--line-strong); background: var(--surface); font-weight: 650; font-size: .92rem; }
+.update-bar > span { display: flex; align-items: center; gap: 8px; }
+.update-bar .btn { width: auto; min-height: 40px; padding: 6px 14px; }
+
+/* Language: three plain choices, each written in its own language. */
+.lang { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin-top: 18px; }
+.lang button { min-height: 40px; padding: 0 14px; border-radius: 999px; border: var(--hair) solid var(--line-strong); background: transparent; color: var(--ink-2); font-weight: 650; font-size: .9rem; }
+.lang button.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.menu-h { margin: 20px 2px 8px; }
+.menu-list .grow { flex: 1; }
+.switch { width: 40px; height: 24px; border-radius: 999px; background: var(--line-strong); position: relative; flex: none; transition: background .2s; }
+.switch::after { content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%; background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .25); transition: transform .2s var(--ease); }
+[aria-checked="true"] > .switch { background: var(--magenta); }
+[aria-checked="true"] > .switch::after { transform: translateX(16px); }
+
+/* The drumroll: bids face down, shivering, before they flip. */
+.bids-strip.drum .bid-cell { animation: shiver .12s linear infinite alternate; animation-delay: calc(var(--i) * -40ms); }
+.bids-strip.drum .bid-cell b { color: var(--ink-3); }
+@keyframes shiver { from { transform: translateY(0) rotate(-1.2deg); } to { transform: translateY(-2px) rotate(1.2deg); } }
+
+/* Joining mid-game */
+.card.joins { display: flex; align-items: center; gap: 12px; }
+.card.joins .ava, .card.joins .flag { width: 34px; height: 34px; border-radius: 10px; }
+.card.joins b { display: block; }
+.card.joins span { font-size: .88rem; color: var(--ink-2); }
+.roster .prow { grid-template-columns: 34px 1fr auto; }
+.roster-act { display: flex; align-items: center; gap: 8px; }
+.roster-act .link { min-height: 40px; padding: 8px 4px; }
+.add-player { display: grid; gap: 10px; margin-top: 18px; }
+.add-player h3 { margin: 0; }
+.add-player label { margin: 2px 2px -4px; }
+.add-player .btn { margin-top: 2px; }
+select { min-height: var(--tap); border-radius: 12px; border: var(--hair) solid var(--line-strong); background: var(--surface); padding: 0 12px; width: 100%; }
+select:focus { border-color: var(--magenta); outline: none; }
+.podium .who > span { font-size: .8rem; color: var(--ink-3); }
+
+/* Cheat card: a rank ladder, strongest on top, then the triangle. */
+.ladder { list-style: none; margin: 4px 0 0; padding: 0; border: var(--hair) solid var(--line); border-radius: var(--radius); overflow: hidden; background: var(--surface); }
+.ladder li { display: grid; grid-template-columns: 52px 1fr; align-items: center; gap: 12px; padding: 10px 14px; border-top: var(--hair) solid var(--line); }
+.ladder li:first-child { border-top: 0; }
+.ladder li > .ava { width: 40px; height: 40px; border-radius: 11px; justify-self: center; }
+.ladder b { display: block; font-size: 1rem; }
+.ladder span { font-size: .86rem; color: var(--ink-2); }
+.suits { display: flex; justify-self: center; }
+.suits .suit + .suit { margin-left: -12px; }
+.suit { display: grid; place-items: center; width: 28px; height: 38px; border-radius: 6px; font-size: .78rem; font-weight: 800; font-style: italic; color: #fff;
+  box-shadow: 0 0 0 1.5px var(--surface); justify-self: center; }
+.suit.black { background: #1b1414; box-shadow: 0 0 0 1px var(--line-strong); }
+.suit.yellow { background: #d99a1e; color: #1d1404; }
+.suit.purple { background: #6a4fb3; }
+.suit.green { background: #2e9e63; }
+.twist { margin-top: 14px; padding: 12px 14px; border-radius: var(--radius); background: var(--tint); }
+.twist p { margin: 0 0 10px; font-size: .92rem; }
+.cycle { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+.cycle .ava { width: 40px; height: 40px; border-radius: 11px; }
+.cycle > span { display: grid; justify-items: center; color: var(--ink-2); flex: 1; min-width: 0; }
+.cycle small { font-size: .72rem; font-style: italic; }
+
+/* Awards: one title per player */
+.awards { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
+.awards li { display: grid; grid-template-columns: 34px 1fr 20px; gap: 12px; align-items: center; padding: 10px 0; border-top: var(--hair) solid var(--line); }
+.awards li:first-child { border-top: 0; }
+.awards li .ava, .awards li .flag { width: 34px; height: 34px; border-radius: 10px; }
+.awards b { display: block; font-size: 1rem; }
+.awards li > div > span { font-size: .86rem; color: var(--ink-2); }
+.awards .nm { color: var(--ink); font-weight: 650; }
+.awards li > .ico { color: var(--ink-3); }
+.awards li.me b { color: var(--magenta); }
+.card.personal .award-title { display: inline-flex; align-items: center; gap: 5px; font-weight: 700; color: var(--ink); margin: 1px 0; }
+.card.personal .award-title + span { display: block; }
+
+/* Chinese text falls back to a native CJK face (Hanken Grotesk has no CJK glyphs). */
+:lang(zh) body, :lang(zh) button, :lang(zh) input, :lang(zh) select { font-family: 'Hanken Grotesk', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
+#top .round b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.awards li .flag:not(.ava), .card.joins .flag:not(.ava) { width: 26px; height: 19px; justify-self: center; }
+.awards li .flag:not(.ava), .card.joins .flag:not(.ava) { border-radius: 3px; }
+/* Header: three tools on the right, so keep them snug and let long round labels drop the "/ 10". */
+#top { gap: 4px; }
+#top .icon-btn { min-width: 40px; padding: 0 8px; }
+@media (max-width: 400px) { :lang(ms) #top .round b span { display: none; } }

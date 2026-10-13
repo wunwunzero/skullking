@@ -143,3 +143,66 @@ test('player summary and plain totals', () => {
   assert.equal(plain(-10), '−10');
   assert.equal(plain(0), '0');
 });
+
+import { playersIn, sortedPlayers, awards } from '../scoring.js';
+import { t, tn, setLang, ordinal } from '../i18n.js';
+
+// Ana, Ben, Cat from round 1; Dan joins at round 3 sitting after Ana; Ben leaves after round 3.
+const roster = {
+  phase: 'bidding', round: 5, firstDealer: 'a',
+  players: {
+    a: { name: 'Ana', order: 0 }, d: { name: 'Dan', order: 1, from: 3 },
+    b: { name: 'Ben', order: 2, left: 4 }, c: { name: 'Cat', order: 3 },
+    x: { name: 'Oops', order: 4, from: 2, left: 2 },
+  },
+  bids: { 1: { a: 1, b: 0, c: 0 }, 2: { a: 0, b: 1, c: 1 }, 3: { a: 1, b: 1, c: 0, d: 1 }, 4: { a: 1, c: 1, d: 2 } },
+  results: {
+    1: { a: { tricks: 1 }, b: { tricks: 0 }, c: { tricks: 0 } },
+    2: { a: { tricks: 0 }, b: { tricks: 1 }, c: { tricks: 1 } },
+    3: { a: { tricks: 1 }, b: { tricks: 1 }, c: { tricks: 0 }, d: { tricks: 1 } },
+    4: { a: { tricks: 1 }, c: { tricks: 1 }, d: { tricks: 2 } },
+  },
+};
+
+test('players joining and leaving: who plays which round', () => {
+  assert.deepEqual(sortedPlayers(roster).map(p => p.id), ['a', 'd', 'b', 'c'], 'removed-before-playing is gone');
+  assert.deepEqual(playersIn(roster, 2).map(p => p.id), ['a', 'b', 'c']);
+  assert.deepEqual(playersIn(roster, 3).map(p => p.id), ['a', 'd', 'b', 'c']);
+  assert.deepEqual(playersIn(roster, 4).map(p => p.id), ['a', 'd', 'c']);
+  const tot = totals(roster);
+  assert.equal(tot.d.total, 20 + 40);
+  assert.equal(tot.b.total, 10 + 20 + 20, 'Ben keeps his score after leaving');
+  assert.equal(tot.d.rounds[2], undefined, 'no score before joining');
+  assert.deepEqual(tot.d.running, [0, 0, 20, 60]);
+});
+
+test('dealer rotation skips seats not dealt in', () => {
+  // r1 Ana, r2 Ben (Dan not in yet), r3 Cat, r4 Ana, r5 Dan (Ben gone)
+  assert.deepEqual([1, 2, 3, 4, 5].map(r => dealerFor(roster, r)), ['a', 'b', 'c', 'a', 'd']);
+  assert.equal(leaderFor(roster, 2), 'c');
+  assert.equal(leaderFor(roster, 4), 'd');
+  assert.equal(leaderFor(roster, 5), 'c');
+});
+
+test('awards: one title for everyone, each one true', () => {
+  const done = { ...game, phase: 'done', round: 3 };
+  const a = awards(done);
+  assert.deepEqual(Object.keys(a).sort(), ['a', 'b', 'c']);
+  assert.equal(new Set(Object.values(a).map(x => x.award)).size, 3, 'all different here');
+  const r = awards({ ...roster, phase: 'done', round: 4 });
+  assert.equal(Object.keys(r).length, 4);
+  assert.ok(Object.values(r).every(x => x.title && x.line));
+});
+
+test('translations fill placeholders, pick plurals and fall back to English', () => {
+  assert.equal(t('Round {r}', { r: 3 }), 'Round 3');
+  assert.equal(tn(1, '{n} player', '{n} players'), '1 player');
+  setLang('zh');
+  assert.equal(t('Round {r}', { r: 3 }), '第3轮');
+  assert.equal(ordinal(2), '第2名');
+  assert.equal(t('Not a key'), 'Not a key');
+  setLang('ms');
+  assert.equal(tn(4, '{n} player', '{n} players'), '4 pemain');
+  setLang('en');
+  assert.equal(ordinal(22), '22nd');
+});
