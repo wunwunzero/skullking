@@ -206,3 +206,39 @@ test('translations fill placeholders, pick plurals and fall back to English', ()
   setLang('en');
   assert.equal(ordinal(22), '22nd');
 });
+
+import { leaderboard, champion, playerStats, records, pastSeasons, usualSeating, crewGames } from '../crew.js';
+
+// Two saved games: Ana wins game 1 (season 1), Ben wins game 2 (season 2) with Cat as a guest.
+const snap = (at, season, players, bids, results) => ({ at, season, round: 2, scoring: 'classic', firstDealer: 'p0', players, bids, results });
+const crew = {
+  name: 'Friday Pirates', createdAt: 1, season: { n: 2, start: 150 }, seasons: { 1: { start: 1, end: 150 } },
+  members: { mana: { name: 'Ana', avatar: 'captain', joinedAt: 1 }, mben: { name: 'Ben', joinedAt: 2 }, mcat: { name: 'Cat', joinedAt: 3 } },
+  games: {
+    AAAA: snap(100, 1, { p0: { name: 'Ana', order: 0, member: 'mana', avatar: 'captain' }, p1: { name: 'Ben', order: 1, member: 'mben' } },
+      { 1: { p0: 1, p1: 0 }, 2: { p0: 1, p1: 0 } }, { 1: { p0: { tricks: 1 }, p1: { tricks: 0 } }, 2: { p0: { tricks: 1 }, p1: { tricks: 1 } } }),
+    BBBB: snap(200, 2, { p0: { name: 'Ben', order: 0, member: 'mben' }, p1: { name: 'Cat', order: 1, member: 'mcat' }, p2: { name: 'Ana', order: 2, member: 'mana', avatar: 'captain' } },
+      { 1: { p0: 1, p1: 0, p2: 0 }, 2: { p0: 2, p1: 0, p2: 1 } }, { 1: { p0: { tricks: 1 }, p1: { tricks: 0 }, p2: { tricks: 0 } }, 2: { p0: { tricks: 2 }, p1: { tricks: 0 }, p2: { tricks: 0 } } }),
+  },
+};
+
+test('crew: games, champion and leaderboards', () => {
+  assert.deepEqual(crewGames(crew).map(g => g.code), ['BBBB', 'AAAA']);
+  assert.equal(champion(crew), 'mben', 'last game winner');
+  const all = leaderboard(crew);
+  assert.deepEqual(all.map(x => [x.member, x.wins, x.games]), [['mben', 1, 2], ['mana', 1, 2], ['mcat', 0, 1]]);
+  assert.deepEqual(leaderboard(crew, 1).map(x => x.member), ['mana', 'mben']);
+  assert.equal(pastSeasons(crew)[0].champion, 'mana');
+});
+
+test('crew: personal stats, head to head, records, usual seating', () => {
+  const a = playerStats(crew, 'mana');
+  assert.equal(a.games, 2); assert.equal(a.wins, 1);
+  assert.equal(a.favourite, 'captain');
+  assert.equal(a.made, 3, 'two in game 1, zero bid in round 1 of game 2'); assert.equal(a.rounds, 4);
+  const vsBen = a.rivals.find(v => v.member === 'mben');
+  assert.deepEqual([vsBen.together, vsBen.ahead, vsBen.behind], [2, 1, 1]);
+  const rec = records(crew);
+  assert.equal(rec.highGame.member, 'mben');
+  assert.deepEqual(usualSeating(crew).recent, ['mben', 'mcat', 'mana']);
+});

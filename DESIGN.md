@@ -470,6 +470,11 @@ A "Players" sheet (menu, or a link in the lobby) lists everyone at the table wit
 ### Language and Updates
 Each phone picks English, 中文 or Bahasa Melayu from pill buttons written in their own language (home screen and menu); Chinese falls back to the system CJK face. When a new version is published, a quiet strip at the top of the page offers "A new version is ready · Refresh" instead of a popup.
 
+### Crew (shared history)
+A crew page reached from a card at the top of the home screen ("Your crew", name, arrow). It opens with a small Home link and the crew code as a share chip, then an uppercase "CREW" eyebrow over the crew name at display size (clamp 2–2.8rem, 800) and a muted line ("12 games played · Season 2"). The last winner gets the brass "nailed" card with the Skull King tile ("They sail as the Skull King next game"). One magenta New game button follows. The leaderboard sits under a Season / All time segmented control and uses the podium rows (place, tile, name with "N games · avg X", wins as the italic sounding, brass for first); rows are buttons that open a Player stats sheet. Records are a hairline list card, games a log of tappable rows (winner tile, "Ben won", date and player count, winning score), then past seasons with each champion in a chip. Members with no character yet get an initial on a Tint 2 tile.
+- **Player stats sheet:** a 56px tile with their name and most common award title, then a two-column hairline grid of stat cells (Ink 2 label, 1.45rem italic sounding, Ink 3 sub-line), then Head to head rows with an italic "ahead–behind" score in Made Green / Miss Red.
+- **Crew game setup:** members appear as tinted name chips (not inputs) with their tile; absent members sit above as pill buttons to add back; every row after the first has an up arrow to fix the seating.
+
 ### Toast
 A solid ink bar with 12px corners that slides up from the bottom (.35s) with an underlined inline action. It carries the overlay shadow.
 

@@ -702,3 +702,48 @@ select:focus { border-color: var(--magenta); outline: none; }
 #top { gap: 4px; }
 #top .icon-btn { min-width: 40px; padding: 0 8px; }
 @media (max-width: 400px) { :lang(ms) #top .round b span { display: none; } }
+
+/* ---------- crews: shared history ---------- */
+.crew-link { display: grid; grid-template-columns: 22px 1fr 20px; align-items: center; gap: 12px; width: 100%; text-align: left; margin-bottom: 12px;
+  border: var(--hair) solid var(--line-strong); cursor: pointer; color: inherit; font: inherit; }
+.crew-link small { display: block; font-size: .78rem; color: var(--ink-2); }
+.crew-link b { display: block; font-size: 1.1rem; }
+.crew-link:hover { background: var(--tint); }
+.crew-top { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; }
+.crew-top .code-chip { gap: 6px; }
+.crew-hero { padding: 18px 2px 14px; }
+.crew-hero small { font-size: .8rem; color: var(--ink-2); font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.crew-hero h1 { font-size: clamp(2rem, 9vw, 2.8rem); font-weight: 800; letter-spacing: -.035em; margin: 2px 0 4px; overflow-wrap: anywhere; }
+.crew-hero p { margin: 0; color: var(--ink-2); }
+.card.champ .outcome .ava { width: 44px; height: 44px; border-radius: 12px; }
+.crew-seg { margin-bottom: 10px; }
+.crew-seg button { min-height: 44px; }
+button.prow { width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; border-left: 0; border-right: 0; border-bottom: 0; }
+button.prow:hover { background: var(--tint); }
+.crew-board .total { font-size: 1rem; min-width: 64px; }
+.game-log .prow, .board .prow:has(> .chip) { grid-template-columns: 34px 1fr auto; }
+.records li b { font-weight: 700; }
+.records li small { color: var(--ink-3); }
+.crew-actions { display: grid; gap: 4px; margin-top: 24px; }
+.crew-actions .btn + .btn { margin-top: 0; }
+.ava.initial { background: var(--tint-2); color: var(--ink-2); font-weight: 800; font-size: .9rem; }
+.name-row .member-name { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: var(--tap); padding: 0 12px;
+  border-radius: 12px; background: var(--tint); }
+.name-row .member-name b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.name-row .member-name .ava { width: 28px; height: 28px; border-radius: 8px; }
+.name-row .x-space { width: 44px; flex: none; }
+.toggles.away button .ava { width: 24px; height: 24px; border-radius: 6px; margin-left: -4px; }
+.member-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.member-head .ava.big { width: 56px; height: 56px; border-radius: 14px; }
+.member-head b { display: block; font-size: 1.3rem; }
+.member-head span { display: inline-flex; align-items: center; gap: 5px; font-size: .9rem; color: var(--ink-2); }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: var(--hair); background: var(--line); border: var(--hair) solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.stat { background: var(--surface); padding: 12px 14px; display: grid; gap: 2px; align-content: start; min-width: 0; }
+.stat > span { font-size: .8rem; color: var(--ink-2); }
+.stat > b { font-size: 1.45rem; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
+.stat small { font-size: .78rem; color: var(--ink-3); }
+.stat .fav { display: flex; align-items: center; gap: 8px; font-size: .95rem; font-style: normal; font-weight: 700; }
+.stat .fav .ava { width: 26px; height: 26px; border-radius: 7px; }
+.rivals .prow { grid-template-columns: 34px 1fr auto; }
+.h2h b { font-size: 1.2rem; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; }
+.scores .ro { display: inline-block; padding: 4px; line-height: 1.1; font-style: italic; font-weight: 700; }

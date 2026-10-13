@@ -6,6 +6,7 @@ import {
   playersIn, playsIn, awards,
 } from './scoring.js';
 import { t, tn, ordinal, LANGS, getLang, setLang } from './i18n.js';
+import { crewGames, gameRows, champion as crewChampion, leaderboard, playerStats, records, pastSeasons, usualSeating } from './crew.js';
 
 // Player identity = colour + signal-flag pattern, so it never depends on colour alone.
 const COLORS = ['#1a9bb0', '#e5603e', '#2e9e63', '#6a5acd', '#d99a1e', '#3b82c4', '#a0663a', '#6b7a8c'];
@@ -20,6 +21,7 @@ const FLAG_PATTERNS = [
   c => `<rect width="18" height="13" fill="#fff"/><rect width="9" height="6.5" fill="${c}"/><rect x="9" y="6.5" width="9" height="6.5" fill="${c}"/>`,
 ];
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
+const randomCode = n => Array.from(crypto.getRandomValues(new Uint32Array(n)), x => CODE_CHARS[x % CODE_CHARS.length]).join('');
 const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 
 const $app = document.getElementById('app');
@@ -137,7 +139,8 @@ function toast(msg, action) {
 let audio, noise;
 document.addEventListener('pointerdown', () => { try { audio ||= new AudioContext(); audio.resume(); } catch {} }, { once: false, passive: true });
 S.sound = (() => { try { return localStorage.getItem('sk.sound') !== 'off'; } catch { return true; } })();
-const buzz = pattern => { if (S.sound) navigator.vibrate?.(pattern); };
+// Phones only allow vibration once someone has tapped the page.
+const buzz = pattern => { if (S.sound && navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(pattern); };
 function tones(freqs, gap = .09, peak = .18) {
   if (!audio || !S.sound) return;
   const t0 = audio.currentTime;
@@ -186,8 +189,12 @@ document.addEventListener('visibilitychange', keepAwake);
 
 // ---------- routing ----------
 function route() {
-  const code = (location.hash.slice(1) || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
-  if (code === S.code) return render();
+  const raw = location.hash.slice(1);
+  const crewMatch = raw.match(/^crew=([A-Za-z]{5})$/);
+  const code = crewMatch ? '' : (raw || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 4);
+  S.crewCode = crewMatch ? crewMatch[1].toUpperCase() : null;
+  if (S.crewCode) watchCrew(S.crewCode);
+  if (code === S.code && (S.code || !S.crewCode)) return render();
   S.unsub?.(); S.unsub = null;
   S.code = code.length === 4 ? code : null;
   if (S.claimed && S.code) S.store.release(S.code, S.claimed).catch(() => {});
@@ -206,6 +213,8 @@ let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT =
 function onGame(g) {
   const prev = S.game;
   S.game = g;
+  if (g?.crew) watchCrew(g.crew);
+  if (g) saveToCrew(prev, g);
   if (g) {
     const key = `${g.round}:${g.phase}`;
     S.revealAnim = !!(prev && prev.phase === 'bidding' && g.phase === 'playing' && prev.round === g.round);
@@ -290,7 +299,9 @@ function render() {
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   renderTop();
-  if (!S.code) { $app.innerHTML = S.setup ? setupView() : homeView(); }
+  if (!S.code && S.setup) { $app.innerHTML = setupView(); }
+  else if (!S.code && S.crewCode) { $app.innerHTML = S.crew === undefined ? `<p class="loading">${t('Finding the ship…')}</p>` : S.crew ? crewHomeView(S.crew) : noCrewView(); }
+  else if (!S.code) { $app.innerHTML = homeView(); }
   else if (S.game === undefined) { $app.innerHTML = `<p class="loading">${t('Finding the ship…')}</p>`; }
   else if (S.game === null) {
     $app.innerHTML = `<div class="card"><h2>${t('No game “{code}”', { code: esc(S.code) })}</h2><p class="muted">${t('Check the code with whoever started the game.')}</p>
@@ -387,12 +398,14 @@ function homeView() {
       <li><b>2</b><span>${t('Bids reveal together, like the fist shake')}</span></li>
       <li><b>3</b><span>${t('Tap when you win a trick; scoring is automatic')}</span></li>
     </ol></section>
-  <button class="btn primary" data-act="new">${icon('plus')} ${t('New game')}</button>
+  ${myCrews().map(c => `<button class="card crew-link" data-act="open-crew" data-c="${c.code}">${icon('users')}<div><small>${t('Your crew')}</small><b>${esc(c.name)}</b></div>${icon('lead')}</button>`).join('')}
+  <button class="btn primary" data-act="new">${icon('plus')} ${t(myCrews().length ? 'One-off game' : 'New game')}</button>
   <div class="card">
-    <h2 class="t3">${t('Join a game')}</h2>
-    <form class="join" data-form="join"><input name="code" maxlength="4" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game code')}" required>
+    <h2 class="t3">${t('Join a game or crew')}</h2>
+    <form class="join" data-form="join"><input name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
     <button class="btn ink">${t('Join')}</button></form>
   </div>
+  ${myCrews().length ? '' : `<button class="btn" data-act="new-crew">${icon('users')} ${t('Start a crew to keep score over time')}</button>`}
   <button class="btn ghost" data-act="rules">${icon('book')} ${t('How scoring works')}</button>
   ${langPicker()}
   ${S.store.live ? '' : `<p class="note">${t('Local mode: games sync between tabs on this device only.')}</p>`}`;
@@ -405,19 +418,25 @@ function langPicker() {
 }
 
 function setupView() {
-  const { names, dealer } = S.setup;
+  const { names, dealer, members = [], crew } = S.setup;
+  const crewData = crew && S.crew;
+  const away = crewData ? Object.entries(crewData.members || {}).filter(([m]) => !members.includes(m)) : [];
   return `
-  <h2>${t("Who's playing?")}</h2>
+  <h2>${t(crew ? 'Who’s playing tonight?' : "Who's playing?")}</h2>
   <p class="muted small">${t('Seating order around the table. Tap the circle next to whoever deals round 1.')}</p>
-  <form data-form="setup" role="radiogroup" aria-label="${t('Who deals first')}">
+  ${crewData && away.length ? `<p class="muted small" style="margin:12px 2px 6px">${t('Also in the crew: tap to add')}</p>
+    <div class="toggles away">${away.map(([m, x]) => `<button type="button" data-act="add-member" data-m="${m}">${memberTile(x)}${esc(x.name)}</button>`).join('')}</div>` : ''}
+  <form data-form="setup" role="radiogroup" aria-label="${t('Who deals first')}" style="margin-top:14px">
     ${names.map((n, i) => `
       <div class="name-row">
         <span class="seatno">${i + 1}</span>
-        <input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${t('Player {n}', { n: i + 1 })}" autocomplete="off" data-idx="${i}">
+        ${members[i] && crewData?.members?.[members[i]] ? `<span class="member-name">${memberTile(crewData.members[members[i]])}<b>${esc(n)}</b></span>`
+          : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${t(crew ? 'Guest name' : 'Player {n}', { n: i + 1 })}" autocomplete="off" data-idx="${i}">`}
+        ${i > 0 ? `<button type="button" class="x" data-act="move-up" data-i="${i}" aria-label="${t('Move {name} up', { name: esc(n || t('Player {n}', { n: i + 1 })) })}">${icon('up-arrow')}</button>` : '<span class="x-space"></span>'}
         <button type="button" role="radio" aria-checked="${dealer === i}" aria-label="${t('{name} deals first', { name: esc(n || t('Player {n}', { n: i + 1 })) })}" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">${dealer === i ? `${icon('check', 'xs')}${t('Deals')}` : '<span class="radio-dot" aria-hidden="true"></span>'}</button>
         ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : ''}
       </div>`).join('')}
-    ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} ${t('Add player')}</button>` : ''}
+    ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} ${t(crew ? 'Add a guest' : 'Add player')}</button>` : ''}
     <div class="section-h"><h2 class="t3">${t('House rules')}</h2></div>
     <div class="seg" role="radiogroup" aria-label="${t('Scoring')}">
       <button type="button" role="radio" aria-checked="${S.setup.scoring === 'classic'}" class="${S.setup.scoring === 'classic' ? 'on' : ''}" data-act="set-scoring" data-v="classic"><b>${t('Classic')}</b><span>${t('±20 per trick')}</span></button>
@@ -429,6 +448,7 @@ function setupView() {
         `<button type="button" aria-pressed="${!!S.setup.exp[k]}" class="${S.setup.exp[k] ? 'on' : ''}" data-act="toggle-exp" data-k="${k}">${icon(k)}${t(l)}</button>`).join('')}
     </div>
     <button class="btn primary" style="margin-top:20px">${t('Create game')}</button>
+    ${crew ? `<p class="small muted" style="margin:8px 2px 0">${t('Saved to {crew} when the game finishes.', { crew: esc(crewData?.name || '') })}</p>` : ''}
     <button type="button" class="btn ghost" data-act="cancel-setup">${t('Cancel')}</button>
   </form>`;
 }
@@ -436,16 +456,27 @@ function setupView() {
 async function createGame(names, dealer, opts = {}) {
   let code;
   for (let i = 0; i < 8; i++) {
-    code = Array.from(crypto.getRandomValues(new Uint32Array(4)), x => CODE_CHARS[x % CODE_CHARS.length]).join('');
+    code = randomCode(4);
     if (!(await S.store.exists(code))) break;
   }
-  const players = {};
-  names.forEach((n, i) => { players['p' + i] = { name: n, order: i, ...(opts.avatars?.['p' + i] ? { avatar: opts.avatars['p' + i] } : {}) }; });
+  const players = {}, members = opts.members || [];
+  // A crew's last winner gets the Skull King; everyone else keeps the character they last played.
+  if (opts.crew && S.crew && opts.champion === undefined) {
+    const champ = crewChampion(S.crew), i = members.indexOf(champ);
+    opts.champion = i >= 0 ? 'p' + i : null;
+    opts.avatars = Object.fromEntries(members.map((m, j) => [`p${j}`, S.crew.members?.[m]?.avatar])
+      .filter(([pid, a]) => CREW[a] && (a !== 'skullking' || pid === opts.champion)));
+  }
+  names.forEach((n, i) => {
+    players['p' + i] = { name: n, order: i, ...(opts.avatars?.['p' + i] ? { avatar: opts.avatars['p' + i] } : {}), ...(opts.crew && members[i] ? { member: members[i] } : {}) };
+  });
   const game = { createdAt: Date.now(), phase: 'lobby', round: 1, firstDealer: 'p' + dealer, players, scoring: opts.scoring || 'classic' };
   if (opts.champion) game.champion = opts.champion;
+  if (opts.crew) game.crew = opts.crew;
   const exp = Object.fromEntries(Object.entries(opts.exp || {}).filter(([, v]) => v));
   if (Object.keys(exp).length) game.expansions = exp;
   await S.store.create(code, game);
+  if (opts.crew) S.store.updateCrew(opts.crew, { current: code }).catch(() => {});
   rememberCreated(code, game.createdAt);
   S.setup = null;
   location.hash = code;
@@ -525,12 +556,13 @@ function lobbyView(g) {
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === dealerFor(g, 1) ? `<span class="badge">${t('deals first')}</span>` : ''}</b></div><span></span><span></span></div>`).join('')}
   </div>
   <button class="link" data-act="roster">${icon('users', 'sm')}<span>${t('Add or remove players')}</span></button>
-  <p class="rules-line">${esc(rulesLine(g))}</p>
+  <p class="rules-line">${esc(rulesLine(g))}${g.crew && S.crew ? `<br>${t('Saved to {crew} when the game finishes.', { crew: esc(S.crew.name) })}` : ''}</p>
   <button class="btn ghost" data-act="rules">${icon('book')} ${esc(t('Rules & scoring'))}</button>
   <button class="btn primary" style="margin-top:8px" data-act="start">${t('Start round 1')}</button>`;
 }
-function shareButtons() {
-  return `<div class="row-btns"><button class="btn" data-act="copy-link">${icon('link')} ${t('Copy link')}</button>${navigator.share ? `<button class="btn" data-act="native-share">${icon('share')} ${t('Share')}</button>` : ''}</div>`;
+function shareButtons(url = '') {
+  const u = url ? ` data-url="${esc(url)}"` : '';
+  return `<div class="row-btns"><button class="btn" data-act="copy-link"${u}>${icon('link')} ${t('Copy link')}</button>${navigator.share ? `<button class="btn" data-act="native-share"${u}>${icon('share')} ${t('Share')}</button>` : ''}</div>`;
 }
 
 let qrLoading;
@@ -538,7 +570,7 @@ function drawQR() {
   const el = document.getElementById('qr');
   if (!el) return;
   const paint = () => {
-    try { const q = window.qrcode(0, 'M'); q.addData(shareURL()); q.make(); el.innerHTML = q.createImgTag(5, 0); }
+    try { const q = window.qrcode(0, 'M'); q.addData(el.dataset.url || shareURL()); q.make(); el.innerHTML = q.createImgTag(5, 0); }
     catch { el.hidden = true; }
   };
   if (window.qrcode) return paint();
@@ -903,6 +935,7 @@ function doneView(g) {
   </div>
   ${awardsCard(g)}
   <div class="card"><h2 class="t3">${t('The voyage')}</h2>${chartSVG(g)}</div>
+  ${g.crew && S.crew ? `<button class="btn" data-act="open-crew" data-c="${g.crew}">${icon('users')} ${t('Saved to {crew}: see the history', { crew: esc(S.crew.name) })}</button>` : ''}
   <button class="btn primary" data-act="rematch">${t('Rematch, same crew')}</button>
   <button class="btn" data-act="scores">${icon('chart')} ${t('Round-by-round table')}</button>
   <button class="btn ghost" data-act="home">${t('Home')}</button>
@@ -912,19 +945,20 @@ function doneView(g) {
 // ---------- sheets ----------
 function renderSheet() {
   const s = S.sheet;
-  if (!s || (s.kind !== 'rules' && !S.game)) {
+  if (!s || (!['rules', 'member', 'pastgame', 'crewshare', 'newcrew'].includes(s.kind) && !S.game)) {
     const wasOpen = !$sheet.hidden;
     $sheet.hidden = true; $sheet.innerHTML = '';
     if (wasOpen && S.opener?.isConnected) S.opener.focus({ preventScroll: true });
     S.opener = null;
     return;
   }
-  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet }[s.kind]?.(s) || '';
-  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what') }[s.kind];
+  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
+  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew') }[s.kind];
   $sheet.hidden = false;
   const opening = $sheet.hidden;
   $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2 tabindex="-1">${esc(title)}</h2><button class="icon-btn outline" data-act="close" aria-label="${t('Close')}">${icon('close')}</button></div>${body}</div>`;
-  if (s.kind === 'share') drawQR();
+  if (s.kind === 'share' || s.kind === 'crewshare') drawQR();
+  if (s.kind === 'newcrew') $sheet.querySelector('input')?.focus();
   if (opening) { S.opener = document.activeElement; $sheet.querySelector('h2')?.focus(); }
 }
 
@@ -938,10 +972,11 @@ function scoresSheet() {
       if (!playsIn(p, r)) return '<td class="muted"></td>';
       if (r > lastEditable) return `<td class="muted">${r === g.round && bid != null && g.phase !== 'bidding' ? `<small>${t('Bid')} ${bid}</small>` : ''}</td>`;
       const s = tot[p.id].rounds[r];
+      if (S.readOnlyTable) return `<td><span class="ro"><b class="${s >= 0 ? 'good-t' : 'bad-t'}">${signed(s)}</b><small>${bid ?? '–'}/${res?.tricks ?? '–'}</small></span></td>`;
       return `<td><button data-act="edit" data-r="${r}" data-id="${p.id}" aria-label="${t('Edit {name} round {r}', { name: esc(p.name), r })}"><b class="${s >= 0 ? 'good-t' : 'bad-t'}">${signed(s)}</b><small>${bid ?? '–'}/${res?.tricks ?? '–'}</small></button></td>`;
     }).join('')}</tr>`;
   }
-  return `<p class="small muted" style="margin-top:0">${t('Cells show score and bid/won. Tap a scored round to fix it.')}</p>
+  return `<p class="small muted" style="margin-top:0">${t(S.readOnlyTable ? 'Cells show score and bid/won.' : 'Cells show score and bid/won. Tap a scored round to fix it.')}</p>
   <div class="tbl-wrap"><table class="scores"><thead><tr><th>#</th>${ps.map(p => `<th>${flag(p.id)}${esc(p.name)}</th>`).join('')}</tr></thead>
   <tbody>${rows}</tbody><tfoot><tr><td></td>${ps.map(p => `<td>${plain(tot[p.id].total)}</td>`).join('')}</tr></tfoot></table></div>`;
 }
@@ -985,6 +1020,193 @@ function menuSheet() {
   <p class="small muted" style="margin:12px 2px 0">${S.seat === 'watch' ? t('You are the table screen.') : t('You are {name}.', { name: `<b>${esc(name(S.seat))}</b>` })} ${esc(rulesLine(g))}. ${t(S.store.live ? 'Live sync on.' : 'Local mode: this device only.')}</p>`;
 }
 
+// ---------- crews: a friend group's shared history ----------
+const CREWS_KEY = 'sk.crews';
+function myCrews() { try { return JSON.parse(localStorage.getItem(CREWS_KEY) || '[]'); } catch { return []; } }
+function saveCrews(list) { try { localStorage.setItem(CREWS_KEY, JSON.stringify(list)); } catch {} }
+const crewURL = code => `${location.origin}${location.pathname}#crew=${code}`;
+
+// Follow one crew's data (the one on screen, or the crew of the game being played).
+function watchCrew(code) {
+  if (S.crewWatching === code) return;
+  S.crewUnsub?.();
+  S.crewWatching = code; S.crew = undefined; S.crewAll = false;
+  S.crewUnsub = S.store.subscribeCrew(code, c => {
+    S.crew = c;
+    if (c) {
+      // This phone now belongs to the crew: show it on the home screen.
+      const list = myCrews().filter(x => x.code !== code);
+      saveCrews([{ code, name: c.name }, ...list]);
+      if (S.game) saveToCrew(null, S.game);
+    }
+    if (!S.code || S.game) render();
+  });
+}
+
+// A crew member for a typed name: an existing member with that name, or a new one added to `patch`.
+function memberFor(nm, patch) {
+  const hit = Object.entries(S.crew?.members || {}).find(([, x]) => x.name.toLowerCase() === nm.toLowerCase());
+  if (hit) return hit[0];
+  const m = 'm' + Array.from(crypto.getRandomValues(new Uint8Array(8)), b => (b % 36).toString(36)).join('');
+  patch[`members/${m}`] = { name: nm, joinedAt: Date.now() };
+  return m;
+}
+
+// A finished crew game is saved to the crew's history (any phone can do it; the write is the
+// same from every phone). If the final scoring is undone, it comes back out.
+function saveToCrew(prev, g) {
+  if (!g.crew || !S.crew || S.crewWatching !== g.crew) return;
+  if (g.phase === 'done') {
+    const keys = Object.keys(g.history || {}).sort();
+    const pick = (o, ks) => Object.fromEntries(ks.filter(k => o?.[k] != null).map(k => [k, o[k]]));
+    const snap = JSON.parse(JSON.stringify({
+      at: +keys[keys.length - 1] || g.createdAt, round: g.round, scoring: g.scoring || 'classic', firstDealer: g.firstDealer,
+      players: Object.fromEntries(Object.entries(g.players).map(([pid, p]) => [pid, pick(p, ['name', 'order', 'member', 'avatar', 'from', 'left'])])),
+      ...pick(g, ['expansions', 'bids', 'results', 'cannon', 'destroyed']),
+    }));
+    const key = JSON.stringify(snap);
+    if (S.savedSnap === `${S.code}:${key}`) return;
+    S.savedSnap = `${S.code}:${key}`;
+    snap.season = S.crew.games?.[S.code]?.season ?? S.crew.season?.n ?? 1;
+    const patch = { [`games/${S.code}`]: snap };
+    // Remember each member's character for next time.
+    for (const p of Object.values(g.players)) if (p.member && CREW[p.avatar] && p.avatar !== 'skullking' && S.crew.members?.[p.member]) patch[`members/${p.member}/avatar`] = p.avatar;
+    if (S.crew.current === S.code) patch.current = null;
+    S.store.updateCrew(g.crew, patch).catch(err => console.warn('crew save', err));
+  } else if (prev?.phase === 'done' && S.crew.games?.[S.code]) {
+    S.savedSnap = null;
+    S.store.updateCrew(g.crew, { [`games/${S.code}`]: null }).catch(() => {});
+  }
+}
+
+const memberTile = (x, cls = '') => x?.avatar && CREW[x.avatar] ? avatarTile(x.avatar, cls)
+  : `<span class="flag ava initial ${cls}" aria-hidden="true">${esc((x?.name || '?').slice(0, 1).toUpperCase())}</span>`;
+const mname = m => S.crew?.members?.[m]?.name || '?';
+const pct = x => `${Math.round(x * 100)}%`;
+function fmtDate(at) {
+  if (!at) return '';
+  const loc = { zh: 'zh-CN', ms: 'ms-MY' }[getLang()] || 'en-GB';
+  return new Date(at).toLocaleDateString(loc, { day: 'numeric', month: 'short', ...(new Date(at).getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}) });
+}
+// Render a saved game with the helpers that read S.game (flags, chart, tables).
+function withGame(g, fn) { const keep = S.game; S.game = g; try { return fn(); } finally { S.game = keep; } }
+
+function noCrewView() {
+  return `<div class="card"><h2>${t('No crew “{code}”', { code: esc(S.crewCode) })}</h2><p class="muted">${t('Check the code with whoever started the crew.')}</p>
+    <button class="btn primary" data-act="home">${t('Back')}</button></div>`;
+}
+
+function crewHomeView(c) {
+  const season = c.season?.n || 1, tab = S.crewTab === 'all' ? 'all' : 'season';
+  const board = leaderboard(c, tab === 'all' ? null : season), games = crewGames(c);
+  const champ = crewChampion(c), rec = records(c), past = pastSeasons(c);
+  const live = c.current && !c.games?.[c.current] ? c.current : null;
+  const shown = S.crewAll ? games : games.slice(0, 8);
+  const recLine = (k, label, fmt) => rec[k] ? `<li>${icon({ highGame: 'up', lowGame: 'down', bigRound: 'streak', badRound: 'kraken', streak: 'target', wins: 'crown' }[k])}<span>${t(label)}: <b>${esc(mname(rec[k].member))}</b> ${fmt(rec[k])} <small>· ${fmtDate(rec[k].at)}</small></span></li>` : '';
+  return `
+  <div class="crew-top"><button class="link" data-act="home">${icon('exit', 'sm')}<span>${t('Home')}</span></button>
+    <button class="code-chip" data-act="crew-share" aria-label="${t('Invite to the crew')}">${icon('share', 'sm')}${esc(S.crewCode)}</button></div>
+  <section class="crew-hero"><small>${t('Crew')}</small><h1>${esc(c.name)}</h1>
+    <p>${tn(games.length, '{n} game played', '{n} games played')} · ${t('Season {n}', { n: season })}</p></section>
+  ${champ && c.members?.[champ] ? `<div class="card scored nailed champ"><div class="outcome">${avatarTile('skullking')}<div class="what">${t('{name} won the last game', { name: esc(mname(champ)) })}
+    <small>${t('They sail as the Skull King next game.')}</small></div></div></div>` : ''}
+  ${live ? `<button class="btn" data-act="open-game" data-code="${live}">${icon('lead')} ${t('Back to game {code}', { code: live })}</button>` : ''}
+  <button class="btn primary" data-act="crew-new">${icon('plus')} ${t('New game')}</button>
+
+  <div class="section-h"><h2 class="t3">${t('Leaderboard')}</h2></div>
+  <div class="seg crew-seg" role="radiogroup" aria-label="${t('Leaderboard')}">
+    <button type="button" role="radio" aria-checked="${tab === 'season'}" class="${tab === 'season' ? 'on' : ''}" data-act="crew-tab" data-v="season"><b>${t('Season {n}', { n: season })}</b></button>
+    <button type="button" role="radio" aria-checked="${tab === 'all'}" class="${tab === 'all' ? 'on' : ''}" data-act="crew-tab" data-v="all"><b>${t('All time')}</b></button>
+  </div>
+  ${board.length ? `<div class="board podium crew-board">${board.map(x => `<button class="prow" data-act="member" data-m="${x.member}" style="--crew:${CREW[c.members?.[x.member]?.avatar]?.color || 'transparent'}">
+      <span class="place">${x.place}</span>${memberTile(c.members?.[x.member])}
+      <div class="who"><b><span class="nm">${esc(x.name)}</span>${x.place === 1 ? icon('crown', 'sm') : ''}</b><span>${tn(x.games, '{n} game', '{n} games')} · ${t('avg {n}', { n: plain(x.avg) })}</span></div>
+      <span class="total">${tn(x.wins, '{n} win', '{n} wins')}</span></button>`).join('')}</div>
+    <p class="small muted" style="margin:8px 2px 0">${t('Ranked by wins, then win rate, then average score. Tap a name for their stats.')}</p>`
+    : `<p class="note">${t(tab === 'all' || !games.length ? 'No finished games yet. Play all 10 rounds and the game lands here.' : 'No games this season yet.')}</p>`}
+
+  ${games.length ? `<div class="card"><h2 class="t3">${t('Records')}</h2><ul class="hl records">
+    ${recLine('highGame', 'Highest score', x => plain(x.value))}
+    ${recLine('bigRound', 'Biggest round', x => `${signed(x.value)} (${t('Round {r}', { r: x.round })})`)}
+    ${recLine('streak', 'Longest bid streak', x => tn(x.value, '{n} in a row', '{n} in a row'))}
+    ${recLine('wins', 'Most wins in a row', x => tn(x.value, '{n} game', '{n} games'))}
+    ${recLine('badRound', 'Worst round', x => `${signed(x.value)} (${t('Round {r}', { r: x.round })})`)}
+    ${recLine('lowGame', 'Lowest score', x => plain(x.value))}
+  </ul></div>` : ''}
+
+  ${games.length ? `<div class="section-h"><h2 class="t3">${t('Games')}</h2><span>${tn(games.length, '{n} game', '{n} games')}</span></div>
+  <div class="board game-log">${shown.map(g => {
+    const rows = gameRows(g), w = rows.filter(x => x.place === 1);
+    return `<button class="prow" data-act="pastgame" data-code="${g.code}">${memberTile(c.members?.[w[0]?.member] || { name: w[0]?.name, avatar: w[0]?.avatar })}
+      <div class="who"><b><span class="nm">${t('{name} won', { name: esc(w.map(x => x.name).join(' & ')) })}</span></b><span>${fmtDate(g.at)} · ${tn(rows.length, '{n} player', '{n} players')}${g.season !== season ? ` · ${t('Season {n}', { n: g.season })}` : ''}</span></div>
+      <span class="total">${plain(w[0]?.total ?? 0)}</span></button>`;
+  }).join('')}</div>
+  ${games.length > shown.length ? `<button class="link" data-act="crew-more">${t('Show all {n} games', { n: games.length })}</button>` : ''}` : ''}
+
+  ${past.length ? `<div class="section-h"><h2 class="t3">${t('Past seasons')}</h2></div>
+  <div class="board">${past.map(s => `<div class="prow">${memberTile(c.members?.[s.champion])}
+    <div class="who"><b>${t('Season {n}', { n: s.n })}</b><span>${fmtDate(s.start)} – ${fmtDate(s.end)} · ${tn(s.games, '{n} game', '{n} games')}</span></div>
+    <span class="chip">${icon('crown')}${esc(s.champion ? mname(s.champion) : '–')}</span></div>`).join('')}</div>` : ''}
+
+  <div class="crew-actions">
+    <button class="btn" data-act="crew-share">${icon('share')} ${t('Invite to the crew')}</button>
+    <button class="btn ghost" data-act="new-season">${icon('streak')} ${t('Start a new season')}</button>
+    <button class="btn ghost" data-act="forget-crew">${icon('exit')} ${t('Remove this crew from this phone')}</button>
+  </div>
+  ${langPicker()}`;
+}
+
+function memberSheet(s) {
+  const c = S.crew, x = c?.members?.[s.m];
+  if (!x) return '';
+  const st = playerStats(c, s.m);
+  const cell = (label, value, sub = '') => `<div class="stat"><span>${t(label)}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
+  return `<div class="member-head">${memberTile(x, 'big')}<div><b>${esc(x.name)}</b>
+    ${st.title ? `<span>${icon(st.title.icon, 'sm')}${t(st.games > 1 ? 'Usually: {title}' : 'Title: {title}', { title: esc(st.title.title) })}</span>` : ''}</div></div>
+  ${st.games ? `<div class="stats">
+    ${cell('Games', st.games)}${cell('Wins', st.wins, pct(st.rate))}
+    ${cell('Average score', plain(st.avg))}${cell('Bid accuracy', pct(st.accuracy), t('{n} of {m} rounds', { n: st.made, m: st.rounds }))}
+    ${cell('Best game', st.bestGame ? plain(st.bestGame.total) : '–', st.bestGame ? fmtDate(st.bestGame.at) : '')}
+    ${cell('Best round', st.bestRound ? signed(st.bestRound.score) : '–', st.bestRound ? `${t('Round {r}', { r: st.bestRound.round })} · ${fmtDate(st.bestRound.at)}` : '')}
+    ${cell('Zero bids nailed', st.zeros)}
+    ${cell('Favourite character', st.favourite ? `<span class="fav">${avatarTile(st.favourite)}${esc(t(CREW[st.favourite].name))}</span>` : '–')}
+  </div>
+  ${st.rivals.length ? `<h3 class="t3" style="margin:18px 2px 8px">${t('Head to head')}</h3>
+    <div class="board rivals">${st.rivals.map(v => `<div class="prow">${memberTile(c.members?.[v.member])}
+      <div class="who"><b><span class="nm">${t('vs {name}', { name: esc(mname(v.member)) })}</span></b><span>${tn(v.together, '{n} game together', '{n} games together')}</span></div>
+      <span class="h2h" aria-label="${t('Finished ahead {a} times, behind {b} times', { a: v.ahead, b: v.behind })}"><b class="${v.ahead > v.behind ? 'good-t' : v.ahead < v.behind ? 'bad-t' : ''}">${v.ahead}–${v.behind}</b></span></div>`).join('')}</div>
+    <p class="small muted" style="margin:8px 2px 0">${t('Times finished ahead – behind.')}</p>` : ''}`
+    : `<p class="note">${t('No finished games yet.')}</p>`}`;
+}
+
+function pastGameSheet(s) {
+  const c = S.crew, raw = c?.games?.[s.code];
+  if (!raw) return '';
+  const g = { ...raw, phase: 'done', round: raw.round || 10 };
+  return withGame(g, () => {
+    const rank = ranking(g), aw = awards(g);
+    S.readOnlyTable = true;
+    try {
+      return `<p class="small muted" style="margin-top:0">${esc(rulesLine(g))}${raw.season ? ` · ${t('Season {n}', { n: raw.season })}` : ''}</p>
+      <div class="board podium">${rank.map(r => `<div class="prow"><span class="place">${r.place}</span>${flag(r.id)}<div class="who"><b><span class="nm">${esc(r.name)}</span>${r.place === 1 ? icon('crown', 'sm') : ''}</b>${aw[r.id] ? `<span>${esc(aw[r.id].title)}</span>` : ''}</div><span class="total">${plain(r.total)}</span></div>`).join('')}</div>
+      <div class="card" style="margin-top:12px"><h2 class="t3">${t('The voyage')}</h2>${chartSVG(g)}</div>
+      ${scoresSheet()}
+      <button class="link" data-act="remove-game" data-code="${s.code}">${icon('close', 'sm')}<span>${t('Remove this game from the history')}</span></button>`;
+    } finally { S.readOnlyTable = false; }
+  });
+}
+
+function crewShareSheet() {
+  return `<div class="share"><p class="muted small" style="margin:0">${t('Everyone in the group opens this once; their phone remembers the crew.')}</p>
+    <div class="big-code">${esc(S.crewCode)}</div><div class="qr" id="qr" data-url="${esc(crewURL(S.crewCode))}"></div>${shareButtons(crewURL(S.crewCode))}</div>`;
+}
+
+function newCrewSheet() {
+  return `<p class="small muted" style="margin-top:0">${t('A crew keeps every finished game, a leaderboard and everyone’s stats, shared by the whole group. One-off games still work without one.')}</p>
+  <form class="add-player" data-form="new-crew"><input type="text" name="name" maxlength="30" placeholder="${t('Crew name, e.g. Friday Pirates')}" aria-label="${t('Crew name')}" autocomplete="off" required>
+    <button class="btn primary">${t('Start the crew')}</button></form>`;
+}
+
 // ---------- players joining and leaving mid-game ----------
 const PIDS = ['p0', 'p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p7'];
 // The first round a player added now would play: this round if bids are still open.
@@ -1019,7 +1241,13 @@ function addPlayer(nm) {
   const id = PIDS.find(x => !g.players[x]);
   if (!id || from > ROUNDS) return;
   const at = (g.players[after]?.order ?? Math.max(...Object.values(g.players).map(p => p.order))) + 1;
-  const patch = { [`players/${id}`]: { name: nm, order: at, ...(from > 1 ? { from } : {}) } };
+  let member = null;
+  if (g.crew && S.crew) {
+    const cp = {};
+    member = memberFor(nm, cp);
+    if (Object.keys(cp).length) S.store.updateCrew(g.crew, cp).catch(() => {});
+  }
+  const patch = { [`players/${id}`]: { name: nm, order: at, ...(from > 1 ? { from } : {}), ...(member ? { member } : {}) } };
   for (const [pid, p] of Object.entries(g.players)) if (p.order >= at) patch[`players/${pid}/order`] = p.order + 1;
   update(patch);
   toast(from > 1 ? t('{name} joins from round {r}', { name: nm, r: from }) : t('{name} joined the crew', { name: nm }));
@@ -1132,14 +1360,61 @@ function cheatSheet() {
 // ---------- actions ----------
 const actions = {
   home() { S.sheet = null; S.actingFor = null; location.hash = ''; S.setup = null; render(); },
+  'crew-home'() { S.sheet = null; S.setup = null; render(); },
   new() { S.setup = { names: ['', '', '', ''], dealer: 0, scoring: 'classic', exp: {} }; render(); document.querySelector('[data-form=setup] input')?.focus(); },
   'cancel-setup'() { S.setup = null; render(); },
-  'add-name'() { syncSetupInputs(); S.setup.names.push(''); render(); document.querySelector(`[data-idx="${S.setup.names.length - 1}"]`)?.focus(); },
-  'rm-name'(el) { syncSetupInputs(); const i = +el.dataset.i; S.setup.names.splice(i, 1); if (S.setup.dealer >= S.setup.names.length || S.setup.dealer === i) S.setup.dealer = 0; render(); },
+  'add-name'() { syncSetupInputs(); S.setup.names.push(''); S.setup.members?.push(null); render(); document.querySelector(`[data-idx="${S.setup.names.length - 1}"]`)?.focus(); },
+  'rm-name'(el) { syncSetupInputs(); const i = +el.dataset.i; S.setup.names.splice(i, 1); S.setup.members?.splice(i, 1); if (S.setup.dealer >= S.setup.names.length || S.setup.dealer === i) S.setup.dealer = 0; render(); },
+  'move-up'(el) {
+    syncSetupInputs();
+    const i = +el.dataset.i, s = S.setup, swap = a => { [a[i - 1], a[i]] = [a[i], a[i - 1]]; };
+    swap(s.names); if (s.members) swap(s.members);
+    if (s.dealer === i) s.dealer = i - 1; else if (s.dealer === i - 1) s.dealer = i;
+    render();
+    document.querySelector(`[data-act="move-up"][data-i="${Math.max(1, i - 1)}"]`)?.focus();
+  },
+  'add-member'(el) {
+    syncSetupInputs();
+    if (S.setup.names.length >= 8) return toast(t('All 8 seats are used in this game.'));
+    const m = el.dataset.m;
+    S.setup.names.push(S.crew.members[m].name); S.setup.members.push(m);
+    render();
+  },
   'set-dealer'(el) { syncSetupInputs(); S.setup.dealer = +el.dataset.i; render(); },
   'set-scoring'(el) { syncSetupInputs(); S.setup.scoring = el.dataset.v; render(); },
   'toggle-exp'(el) { syncSetupInputs(); S.setup.exp[el.dataset.k] = !S.setup.exp[el.dataset.k]; render(); },
   rules() { S.sheet = { kind: 'rules' }; renderSheet(); },
+  'new-crew'() { S.sheet = { kind: 'newcrew' }; renderSheet(); },
+  'open-crew'(el) { S.sheet = null; location.hash = `crew=${el.dataset.c}`; window.scrollTo(0, 0); },
+  'crew-new'() {
+    const c = S.crew, seat = usualSeating(c), last = crewGames(c)[0];
+    const members = seat.recent.length ? seat.recent : seat.others.slice(0, 8);
+    S.setup = { crew: S.crewCode, members: [...members], names: members.map(m => c.members[m].name), dealer: 0,
+      scoring: last?.scoring || 'classic', exp: { ...(last?.expansions || {}) } };
+    if (S.setup.names.length < 2) { S.setup.names.push(...Array(2 - S.setup.names.length).fill('')); S.setup.members.push(...Array(2).fill(null)); S.setup.members.length = S.setup.names.length; }
+    render(); window.scrollTo(0, 0);
+  },
+  'crew-share'() { S.sheet = { kind: 'crewshare' }; renderSheet(); },
+  'crew-tab'(el) { S.crewTab = el.dataset.v; render(); document.querySelector(`[data-act="crew-tab"][data-v="${el.dataset.v}"]`)?.focus({ preventScroll: true }); },
+  'crew-more'() { S.crewAll = true; render(); },
+  member(el) { S.sheet = { kind: 'member', m: el.dataset.m }; renderSheet(); },
+  pastgame(el) { S.sheet = { kind: 'pastgame', code: el.dataset.code }; renderSheet(); },
+  'new-season'() {
+    const c = S.crew, n = c.season?.n || 1;
+    if (!confirm(t('Start season {n}? The current leaderboard is saved with its champion and a fresh one begins.', { n: n + 1 }))) return;
+    S.store.updateCrew(S.crewCode, { season: { n: n + 1, start: Date.now() }, [`seasons/${n}`]: { start: c.season?.start || c.createdAt, end: Date.now() } })
+      .then(() => toast(t('Season {n} has begun', { n: n + 1 }))).catch(() => toast(t("Couldn't save that. Check your connection.")));
+  },
+  'forget-crew'() {
+    if (!confirm(t('Remove {name} from this phone? The crew and its history stay; you can rejoin with the code.', { name: S.crew?.name || '' }))) return;
+    saveCrews(myCrews().filter(c => c.code !== S.crewCode));
+    location.hash = '';
+  },
+  'remove-game'(el) {
+    if (!confirm(t('Remove this game from the history?'))) return;
+    S.store.updateCrew(S.crewCode, { [`games/${el.dataset.code}`]: null });
+    S.sheet = null; renderSheet(); toast(t('Removed'));
+  },
   cheat() { S.sheet = { kind: 'cheat' }; renderSheet(); },
   roster() { S.sheet = { kind: 'roster' }; renderSheet(); },
   'rm-player'(el) { removePlayer(el.dataset.id); },
@@ -1157,6 +1432,7 @@ const actions = {
     document.querySelector('[data-act="toggle-sound"]')?.focus({ preventScroll: true });
   },
   'reload-app'() { location.reload(); },
+  'open-game'(el) { location.hash = el.dataset.code; },
   scores() { S.sheet = { kind: 'scores' }; renderSheet(); },
   menu() { S.sheet = { kind: 'menu' }; renderSheet(); },
   share() { S.sheet = { kind: 'share' }; renderSheet(); },
@@ -1198,8 +1474,11 @@ const actions = {
   'open-actfor'() { S.sheet = { kind: 'actfor' }; renderSheet(); },
   'act-as'(el) { S.actingFor = el.dataset.id; S.sheet = null; render(); window.scrollTo(0, 0); },
   'stop-acting'() { S.actingFor = null; render(); },
-  async 'copy-link'() { try { await navigator.clipboard.writeText(shareURL()); toast(t('Link copied')); } catch { toast(shareURL()); } },
-  'native-share'() { navigator.share({ title: 'Skull King', text: t('Join our Skull King game: {code}', { code: S.code }), url: shareURL() }).catch(() => {}); },
+  async 'copy-link'(el) { const u = el.dataset.url || shareURL(); try { await navigator.clipboard.writeText(u); toast(t('Link copied')); } catch { toast(u); } },
+  'native-share'(el) {
+    const text = el.dataset.url ? t('Join our Skull King crew: {name}', { name: S.crew?.name || '' }) : t('Join our Skull King game: {code}', { code: S.code });
+    navigator.share({ title: 'Skull King', text, url: el.dataset.url || shareURL() }).catch(() => {});
+  },
   start() { update({ phase: 'bidding', round: 1 }); },
   noop() {},
   'pick-crew'(el) {
@@ -1303,7 +1582,8 @@ const actions = {
     // Characters carry over; the Skull King is only kept by the new champion.
     const avatars = Object.fromEntries(ps.map((p, i) => [`p${i}`, p.avatar, p.id]).filter(([, a, pid]) => CREW[a] && (a !== 'skullking' || pid === champion)).map(([k, a]) => [k, a]));
     const champIdx = ps.findIndex(p => p.id === champion);
-    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions, champion: champIdx >= 0 ? `p${champIdx}` : null, avatars });
+    await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions, champion: champIdx >= 0 ? `p${champIdx}` : null, avatars,
+      ...(g.crew ? { crew: g.crew, members: ps.map(p => p.member || null) } : {}) });
     // Carry this phone's seat into the new game (same player ids p0..pN), and point the old game at it.
     const code = location.hash.slice(1);
     if (prevSeat) saveSeat(code, prevSeat);
@@ -1381,8 +1661,21 @@ document.addEventListener('submit', async e => {
   const form = e.target;
   if (form.dataset.form === 'join') {
     const code = new FormData(form).get('code').toUpperCase().replace(/[^A-Z]/g, '');
-    if (code.length !== 4) return toast(t('Codes are 4 letters'));
+    if (code.length === 5) { location.hash = `crew=${code}`; return; }
+    if (code.length !== 4) return toast(t('Game codes are 4 letters, crew codes 5'));
     location.hash = code;
+  }
+  if (form.dataset.form === 'new-crew') {
+    const nm = new FormData(form).get('name').trim().slice(0, 30);
+    if (!nm) return;
+    form.querySelector('button').disabled = true;
+    try {
+      let code;
+      for (let i = 0; i < 8; i++) { code = randomCode(5); if (!(await S.store.crewExists(code))) break; }
+      await S.store.createCrew(code, { name: nm, createdAt: Date.now(), season: { n: 1, start: Date.now() } });
+      S.sheet = null; renderSheet();
+      location.hash = `crew=${code}`;
+    } catch (err) { console.error(err); toast(t("Couldn't save that. Check your connection.")); form.querySelector('button').disabled = false; }
   }
   if (form.dataset.form === 'add-player') {
     addPlayer(new FormData(form).get('name').trim().slice(0, 24));
@@ -1398,7 +1691,17 @@ document.addEventListener('submit', async e => {
     const dealerName = names[S.setup.dealer];
     const dealer = Math.max(0, filled.indexOf(dealerName));
     form.querySelector('button:not([type])').disabled = true;
-    try { await createGame(filled, dealer, { scoring: S.setup.scoring, exp: S.setup.exp }); } catch (err) { console.error(err); toast(t('Could not create game')); form.querySelector('button:not([type])').disabled = false; }
+    try {
+      const opts = { scoring: S.setup.scoring, exp: S.setup.exp };
+      if (S.setup.crew) {
+        // Guests become crew members (a typed name that matches a member is that member).
+        const patch = {};
+        opts.crew = S.setup.crew;
+        opts.members = names.map((n, i) => [n, S.setup.members[i]]).filter(([n]) => n).map(([n, m]) => m || memberFor(n, patch));
+        if (Object.keys(patch).length) await S.store.updateCrew(S.setup.crew, patch);
+      }
+      await createGame(filled, dealer, opts);
+    } catch (err) { console.error(err); toast(t('Could not create game')); form.querySelector('button:not([type])').disabled = false; }
   }
 });
 

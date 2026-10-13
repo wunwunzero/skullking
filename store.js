@@ -30,6 +30,7 @@ async function firebaseStore() {
 
   const database = db.getDatabase(app);
   const gref = (code, path = '') => db.ref(database, `games/${code}${path ? '/' + path : ''}`);
+  const cref = (code, path = '') => db.ref(database, `crews/${code}${path ? '/' + path : ''}`);
   let connected = true, onConn = null;
   db.onValue(db.ref(database, '.info/connected'), s => { connected = !!s.val(); onConn?.(connected); });
   return {
@@ -58,17 +59,40 @@ async function firebaseStore() {
     },
     // Delete one game; the rules only allow this once it is 30+ days old.
     async remove(code) { await db.remove(gref(code)); },
+    // Crews: a friend group's shared history (members, seasons, finished games).
+    async crewExists(code) { await signedIn; return (await db.get(cref(code, 'createdAt'))).exists(); },
+    async createCrew(code, crew) { await signedIn; await db.set(cref(code), crew); },
+    subscribeCrew(code, cb) {
+      let off = () => {};
+      signedIn.then(() => { off = db.onValue(cref(code), s => cb(s.val()), () => cb(null)); });
+      return () => off();
+    },
+    updateCrew(code, patch) { return db.update(cref(code), patch); },
   };
 }
 
 function localStore() {
-  const KEY = 'sk.local.games';
   const chan = 'BroadcastChannel' in self ? new BroadcastChannel('sk-local') : null;
-  const subs = new Map();
-  const all = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
-  const save = g => { try { localStorage.setItem(KEY, JSON.stringify(g)); } catch {} };
-  const emit = code => { const g = all()[code] ?? null; (subs.get(code) || []).forEach(cb => cb(structuredClone(g))); };
-  chan && (chan.onmessage = e => emit(e.data));
+  // Two buckets on this device: games and crews, each { code: data } in localStorage.
+  const bucket = (KEY, name) => {
+    const subs = new Map();
+    const all = () => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch { return {}; } };
+    const save = g => { try { localStorage.setItem(KEY, JSON.stringify(g)); } catch {} };
+    const emit = code => { const g = all()[code] ?? null; (subs.get(code) || []).forEach(cb => cb(structuredClone(g))); };
+    const write = (code, fn) => { const g = all(); fn(g); save(g); emit(code); chan?.postMessage({ name, code }); };
+    return {
+      all, emit, write,
+      subscribe(code, cb) {
+        subs.set(code, [...(subs.get(code) || []), cb]);
+        queueMicrotask(() => cb(structuredClone(all()[code] ?? null)));
+        return () => subs.set(code, (subs.get(code) || []).filter(f => f !== cb));
+      },
+      update(code, patch) { write(code, g => { if (!g[code]) return; for (const [p, v] of Object.entries(patch)) setPath(g[code], p, v); }); },
+    };
+  };
+  const games = bucket('sk.local.games', 'games'), crews = bucket('sk.local.crews', 'crews');
+  chan && (chan.onmessage = e => (e.data?.name === 'crews' ? crews : games).emit(e.data?.code ?? e.data));
+  const all = games.all, write = games.write;
   const setPath = (obj, path, val) => {
     const keys = path.split('/');
     let o = obj;
@@ -76,20 +100,13 @@ function localStore() {
     const last = keys[keys.length - 1];
     if (val === null || val === undefined) delete o[last]; else o[last] = structuredClone(val);
   };
-  const write = (code, fn) => { const g = all(); fn(g); save(g); emit(code); chan?.postMessage(code); };
   const store = {
     live: false,
     onConnection(fn) { fn(true); },
     async exists(code) { return !!all()[code]; },
     async create(code, game) { write(code, g => { g[code] = game; }); },
-    subscribe(code, cb) {
-      subs.set(code, [...(subs.get(code) || []), cb]);
-      queueMicrotask(() => cb(structuredClone(all()[code] ?? null)));
-      return () => subs.set(code, (subs.get(code) || []).filter(f => f !== cb));
-    },
-    async update(code, patch) {
-      write(code, g => { if (!g[code]) return; for (const [p, v] of Object.entries(patch)) setPath(g[code], p, v); });
-    },
+    subscribe: games.subscribe,
+    async update(code, patch) { games.update(code, patch); },
     async claim(code, pid, device) {
       await store.update(code, { [`presence/${pid}`]: device });
       // No server to notice a closed tab, so release on the way out.
@@ -97,6 +114,10 @@ function localStore() {
     },
     async release(code, pid) { await store.update(code, { [`presence/${pid}`]: null }); },
     async remove(code) { write(code, g => { delete g[code]; }); },
+    async crewExists(code) { return !!crews.all()[code]; },
+    async createCrew(code, crew) { crews.write(code, g => { g[code] = crew; }); },
+    subscribeCrew: crews.subscribe,
+    async updateCrew(code, patch) { crews.update(code, patch); },
   };
   return store;
 }
