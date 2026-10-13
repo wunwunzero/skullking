@@ -803,3 +803,5 @@ body.table .standings { --lane-h: 50px; --lane-n: 50; }
 /* Lobby: QR shrinks once every seat is on a phone; Start lives in the dock */
 .card.share.joined .qr img { width: 112px; height: 112px; }
 p, .note { text-wrap: pretty; }
+/* Sheet titles take focus so screen readers start there; they aren't controls, so no ring. */
+.sheet h2[tabindex="-1"]:focus { outline: none; }
