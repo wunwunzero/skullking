@@ -254,6 +254,12 @@ function onGame(g) {
     }
     syncPresence(g);
     checkNudge(g);
+    // "Score before everyone locks in?" is open but everyone just did: go ahead.
+    if (S.ask?.score && (S.ask.score !== g.round || g.phase !== 'results')) setTimeout(() => actions.close(), 0);   // someone else scored
+    else if (S.ask?.score === g.round) {
+      const eff = effectiveResults(g, g.round);
+      if (playersIn(g, g.round).every(p => eff[p.id]?.src === 'confirmed')) setTimeout(() => actions['ask-yes'](), 0);
+    }
     maybeReveal(g);
   }
   render();
@@ -368,6 +374,8 @@ function afterRender() {
       if (k < 1) requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
+    // Animation frames pause when the screen is off or the app is in the background: always land on the real number.
+    setTimeout(() => { c.textContent = (c.dataset.plain ? plain : signed)(target); }, dur + 150);
   }
   // When the round deltas finish fading, redraw once so their space in the tags closes up.
   if (S.deltaUntil > Date.now() && !S.deltaTimer) {
@@ -1633,8 +1641,12 @@ const actions = {
   async score() {
     const g = S.game, r = g.round, eff = effectiveResults(g, r), patch = {};
     const unlocked = playersIn(g, r).filter(p => eff[p.id]?.src !== 'confirmed');
-    if (unlocked.length && !(await ask(t('Score before everyone locks in?'),
-      t('{names} haven’t locked in yet. Their tapped tricks will count, with no bonuses.', { names: unlocked.map(p => p.name).join(', ') }), t('Score now')))) return;
+    if (unlocked.length) {
+      const ok = ask(t('Score before everyone locks in?'),
+        t('{names} haven’t locked in yet. Their tapped tricks will count, with no bonuses.', { names: unlocked.map(p => p.name).join(', ') }), t('Score now'));
+      S.ask.score = r;   // if the last lock-in arrives while this is open, it closes itself and scores
+      if (!(await ok)) return;
+    }
     if (S.game.phase !== 'results' || S.game.round !== r) return;
     for (const [pid, e] of Object.entries(eff)) {
       if (e.src === 'confirmed') continue;
