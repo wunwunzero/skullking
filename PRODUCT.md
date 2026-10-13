@@ -30,7 +30,8 @@ Live multi-phone play: each player bids on their own phone, bids reveal together
 - Static PWA (plain HTML/CSS/JS, no build) on GitHub Pages at wunwunzero.github.io/skullking; Firebase Realtime Database with anonymous sign-in for sync; installable to the home screen; opens with weak signal.
 - Scoring modes: Classic and Rascal (Grapeshot / Cannonball). Optional Kraken, White Whale, Loot.
 - Features: lobby with code + QR, seat presence, nudge, rules sheet, round highlights, end-of-game chart, multi-step undo, enter-for-another-player, table screen mode.
-- Current game only: no accounts, history or stats (deliberately declined).
+- Crews (added 13 Oct 2026 at the users' request): one shared crew per friend group keeps every finished game, a season and all-time leaderboard, player stats, records and past seasons; the crew's last winner gets the Skull King next game. One-off games still work unsaved. Still no accounts.
+- Per-phone language (English, 中文, Bahasa Melayu); players can join or leave mid-game.
 
 ## Brand Commitments
 

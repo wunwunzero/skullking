@@ -180,7 +180,7 @@ export function roundHighlights(game, round, name) {
   const top = [...scores].sort((a, b) => b.s - a.s);
   if (top[0] && top[0].s >= 40 && !(top[1] && top[1].s === top[0].s)) lines.push({ icon: 'up', text: t('Best round: {name} +{n}', { name: name(top[0].id), n: top[0].s }) });
   const low = top[top.length - 1];
-  if (low && low.s <= -20 && !(top[top.length - 2] && top[top.length - 2].s === low.s)) lines.push({ icon: 'down', text: t('Ouch: {name} {n}', { name: name(low.id), n: low.s }) });
+  if (low && low.s <= -20 && !(top[top.length - 2] && top[top.length - 2].s === low.s)) lines.push({ icon: 'down', text: t('Ouch: {name} {n}', { name: name(low.id), n: plain(low.s) }) });
   if (round > 1) {
     const before = leaderAfter(game, tot, round - 1), now = leaderAfter(game, tot, round);
     if (now && before !== now) lines.push({ icon: 'crown', text: t('{name} takes the lead', { name: name(now) }) });

@@ -316,7 +316,9 @@ function render() {
     }[g.phase] || lobbyView)(g);
     if (g.phase === 'lobby') drawQR();
   }
-  if (S.updateReady) $app.insertAdjacentHTML('afterbegin', `<div class="update-bar" role="status"><span>${icon('up', 'sm')}${t('A new version is ready')}</span><button class="btn" data-act="reload-app">${t('Refresh')}</button></div>`);
+  // Never mid-round: a strip appearing above the bid keys would move them under a thumb.
+  const calm = !S.code || !S.game || ['lobby', 'done'].includes(S.game.phase) || (S.game.phase === 'bidding' && !Object.keys(S.game.bids?.[S.game.round] || {}).length);
+  if (S.updateReady && calm) $app.insertAdjacentHTML('afterbegin', `<div class="update-bar" role="status"><span>${icon('refresh', 'sm')}${t('A new version is ready')}</span><button class="btn" data-act="reload-app">${t('Refresh')}</button></div>`);
   if (!sheetFocused) renderSheet();
   afterRender();
   if (fk) { const el = document.querySelector(fk); if (el && !el.disabled) el.focus({ preventScroll: true }); }
@@ -378,7 +380,7 @@ function renderTop() {
   const r = g.round;
   const sub = g.phase === 'lobby' ? t('Waiting to start') : g.phase === 'done' ? t('Game over')
     : tn(r, '{n} card · {name} deals', '{n} cards · {name} deals', { name: esc(name(dealerFor(g, r))) });
-  const inPlay = g.phase === 'bidding' || g.phase === 'playing';
+  const inPlay = g.phase === 'bidding' || g.phase === 'playing' || g.phase === 'results';
   $top.innerHTML = `
     <h1 class="sr-only">${t('Skull King scorer')}${g.phase === 'lobby' || g.phase === 'done' ? '' : `, ${t('Round {r}', { r })}`}</h1>
     <button class="code-chip ${S.online ? '' : 'offline'}" data-act="share" aria-label="${t('Game {code}', { code: esc(S.code) })}${S.online ? '' : `, ${t('offline: changes will sync when you reconnect')}`}. ${t('Invite players')}"><span class="dot ${S.online ? '' : 'off'}" aria-hidden="true"></span>${esc(S.code)}${S.online ? '' : `<span class="off-label">${t('Offline')}</span>`}</button>
@@ -398,14 +400,16 @@ function homeView() {
       <li><b>2</b><span>${t('Bids reveal together, like the fist shake')}</span></li>
       <li><b>3</b><span>${t('Tap when you win a trick; scoring is automatic')}</span></li>
     </ol></section>
-  ${myCrews().map(c => `<button class="card crew-link" data-act="open-crew" data-c="${c.code}">${icon('users')}<div><small>${t('Your crew')}</small><b>${esc(c.name)}</b></div>${icon('lead')}</button>`).join('')}
-  <button class="btn primary" data-act="new">${icon('plus')} ${t(myCrews().length ? 'One-off game' : 'New game')}</button>
+  ${myCrews().length ? `${myCrews().map((c, i) => `${i ? '' : `<button class="btn primary" data-act="crew-quick" data-c="${c.code}">${icon('plus')} ${t('New game with {crew}', { crew: esc(c.name) })}</button>`}
+    <button class="card crew-link" data-act="open-crew" data-c="${c.code}">${icon('users')}<div><small>${t('History, leaderboard and stats')}</small><b>${esc(c.name)}</b></div>${icon('lead')}</button>`).join('')}
+    <button class="btn ghost" data-act="new">${icon('plus')} ${t('One-off game (not saved)')}</button>`
+  : `<button class="btn primary" data-act="new">${icon('plus')} ${t('New game')}</button>`}
   <div class="card">
     <h2 class="t3">${t('Join a game or crew')}</h2>
     <form class="join" data-form="join"><input name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
     <button class="btn ink">${t('Join')}</button></form>
   </div>
-  ${myCrews().length ? '' : `<button class="btn" data-act="new-crew">${icon('users')} ${t('Start a crew to keep score over time')}</button>`}
+  ${myCrews().length ? `<button class="link" data-act="new-crew">${icon('users', 'sm')}<span>${t('Start another crew')}</span></button>` : `<button class="btn" data-act="new-crew">${icon('users')} ${t('Start a crew to keep score over time')}</button>`}
   <button class="btn ghost" data-act="rules">${icon('book')} ${t('How scoring works')}</button>
   ${langPicker()}
   ${S.store.live ? '' : `<p class="note">${t('Local mode: games sync between tabs on this device only.')}</p>`}`;
@@ -423,9 +427,7 @@ function setupView() {
   const away = crewData ? Object.entries(crewData.members || {}).filter(([m]) => !members.includes(m)) : [];
   return `
   <h2>${t(crew ? 'Who’s playing tonight?' : "Who's playing?")}</h2>
-  <p class="muted small">${t('Seating order around the table. Tap the circle next to whoever deals round 1.')}</p>
-  ${crewData && away.length ? `<p class="muted small" style="margin:12px 2px 6px">${t('Also in the crew: tap to add')}</p>
-    <div class="toggles away">${away.map(([m, x]) => `<button type="button" data-act="add-member" data-m="${m}">${memberTile(x)}${esc(x.name)}</button>`).join('')}</div>` : ''}
+  <p class="muted small">${t('Seating order around the table. Mark who deals round 1.')}</p>
   <form data-form="setup" role="radiogroup" aria-label="${t('Who deals first')}" style="margin-top:14px">
     ${names.map((n, i) => `
       <div class="name-row">
@@ -434,9 +436,11 @@ function setupView() {
           : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${t(crew ? 'Guest name' : 'Player {n}', { n: i + 1 })}" autocomplete="off" data-idx="${i}">`}
         ${i > 0 ? `<button type="button" class="x" data-act="move-up" data-i="${i}" aria-label="${t('Move {name} up', { name: esc(n || t('Player {n}', { n: i + 1 })) })}">${icon('up-arrow')}</button>` : '<span class="x-space"></span>'}
         <button type="button" role="radio" aria-checked="${dealer === i}" aria-label="${t('{name} deals first', { name: esc(n || t('Player {n}', { n: i + 1 })) })}" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">${dealer === i ? `${icon('check', 'xs')}${t('Deals')}` : '<span class="radio-dot" aria-hidden="true"></span>'}</button>
-        ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : ''}
+        ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${n ? t('Remove {name}', { name: esc(n) }) : t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : ''}
       </div>`).join('')}
     ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} ${t(crew ? 'Add a guest' : 'Add player')}</button>` : ''}
+    ${crewData && away.length ? `<p class="muted small" style="margin:6px 2px 6px">${t('Also in the crew: tap to add')}</p>
+      <div class="toggles away">${away.map(([m, x]) => `<button type="button" data-act="add-member" data-m="${m}">${memberTile(x)}${esc(x.name)}</button>`).join('')}</div>` : ''}
     <div class="section-h"><h2 class="t3">${t('House rules')}</h2></div>
     <div class="seg" role="radiogroup" aria-label="${t('Scoring')}">
       <button type="button" role="radio" aria-checked="${S.setup.scoring === 'classic'}" class="${S.setup.scoring === 'classic' ? 'on' : ''}" data-act="set-scoring" data-v="classic"><b>${t('Classic')}</b><span>${t('±20 per trick')}</span></button>
@@ -670,13 +674,13 @@ function biddingView(g) {
   const joining = !mine && me() && !S.actingFor ? g.players[me()] : null;
   const card = !mine ? (joining && (joining.from || 1) > r ? joinsCard(joining) : '') : locked ? `<div class="card locked-card">
       <div class="locked-row">${icon('check', 'big-check')}<div><h2 class="t3" style="margin:0">${t('Bid is in')}</h2>
-        <p class="muted small" style="margin:2px 0 0">${t('Hidden until everyone has bid. Tap or hold Peek to check it')}${g.scoring === 'rascal' ? ` · ${t(cannon ? 'Cannonball' : 'Grapeshot')}` : ''}.</p></div></div>
+        <p class="muted small" style="margin:2px 0 0">${t('Hidden until everyone has bid. Tap Peek to see it for 3 seconds')}${g.scoring === 'rascal' ? ` · ${t(cannon ? 'Cannonball' : 'Grapeshot')}` : ''}.</p></div></div>
       <div class="row-btns"><button class="btn peek" data-act="noop" data-peek="${bids[mine]}" aria-label="${t('Peek at your bid')}">${t('Peek')}</button>
         <button class="btn" data-act="change-bid">${t('Change')}</button></div></div>`
     : `<div class="card action">
     <h2 class="t3">${S.actingFor ? t("{name}'s bid", { name: esc(name(mine)) }) : t('Your bid')} · ${tn(r, '{n} card', '{n} cards')}</h2>
     <p class="muted small" style="margin:0">${teach} <button class="link inline" data-act="rules">${t('How scoring works')}</button></p>
-    <div class="bid-grid">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}">${n}</button>`).join('')}</div>
+    <div class="bid-grid" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}">${n}</button>`).join('')}</div>
     ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="${t('Rascal wager')}">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}${t('Grapeshot')}</b><span>${t('{n} pts · half if off by 1', { n: 10 * r })}</span></button>
       <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>${icon('cannon', 'sm')}${t('Cannonball')}</b><span>${t('{n} pts · all or nothing', { n: 15 * r })}</span></button>
@@ -687,7 +691,7 @@ function biddingView(g) {
   ${standingsLine(g, { full: !!banner })}
   ${banner}
   ${card}
-  <div class="section-h"><h2 class="t3">${waiting ? t('Waiting for {n}', { n: waiting }) : t('Revealing')}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
+  <div class="section-h"><h2 class="t3">${waiting === 1 && mine && bids[mine] == null ? t('Waiting for you') : waiting ? t('Waiting for {n}', { n: waiting }) : t('Revealing')}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
   <div class="board" style="--cols:${tableCols(ps.length)}">
     ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${roleBadges(g, r, p.id)}</b></div>
@@ -853,7 +857,8 @@ function resultsView(g) {
   // Score is the table's action: quiet while your own card still needs you, magenta once the counts reconcile.
   const ready = allIn && sum === n;
   const counts = t('{n} of {m} in', { n: inCount, m: ps.length });
-  const status = !allIn ? `${counts} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
+  const status = myPending && allIn ? t('Confirm your round above, then score')
+    : !allIn ? `${counts} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
     : `${counts} · ${t(sum === n ? 'tricks add up' : "tricks don't add up")}`;
   const srcLabel = e => t(!e ? 'waiting' : e.src === 'confirmed' ? 'confirmed' : e.src === 'live' ? 'from taps' : 'auto-filled');
   return `
@@ -889,12 +894,13 @@ function chartSVG(g) {
   let grid = '';
   for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) grid += `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
   for (let i = 1; i <= n; i++) grid += `<text x="${x(i)}" y="${H - 6}" text-anchor="middle">${i}</text>`;
+  const ends = spreadEnds(ps.map(p => ({ id: p.id, y: y(tot[p.id].running[tot[p.id].running.length - 1] ?? 0) - 7 })), 15, T - 6, H - B - 8);
   const lines = ps.map(p => {
     const o = p.order % 8, run = [0, ...tot[p.id].running];
     const pts = run.map((v, i) => `${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    const ex = x(run.length - 1), ey = y(run[run.length - 1]);
+    const ex = x(run.length - 1), ey = ends.find(e => e.id === p.id).y;
     return `<polyline points="${pts}" fill="none" stroke="${color(p.id)}" stroke-width="2.25" stroke-dasharray="${DASHES[o]}" stroke-linejoin="round" stroke-linecap="round"/>
-      ${markSVG(p.id, +(ex + 3).toFixed(1), +(ey - 7).toFixed(1), 14)}`;
+      ${markSVG(p.id, +(ex + 3).toFixed(1), +ey.toFixed(1), 14)}`;
   }).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Running totals by round')}: ${esc(ranking(g).map(r => `${r.name} ${r.total}`).join(', '))}">${grid}${lines}</svg>
     <div class="legend">${ps.map(p => `<span><svg class="dash" viewBox="0 0 24 4" aria-hidden="true"><line x1="1" y1="2" x2="23" y2="2" stroke="${color(p.id)}" stroke-width="2.25" stroke-dasharray="${DASHES[p.order % 8]}" stroke-linecap="round"/></svg>${flag(p.id)}${esc(p.name)}</span>`).join('')}</div>`;
@@ -924,7 +930,7 @@ function doneView(g) {
   const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}${flag(r.id)}</span>`).join('');
   return `
   <section class="winner ${S.finalAnim ? 'arrive' : ''}">
-    <div class="hero-flags"><svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-skull"/></svg>${hero}</div>
+    <div class="hero-flags">${hero}</div>
     <h1>${tops.length > 1 ? t('{names} win', { names: tops.map(r => esc(r.name)).join(' & ') }) : t('{name} wins', { name: esc(tops[0].name) })}</h1>
     <p class="final-total"><b data-count="${tops[0].total}" data-key="${S.code}:final" data-plain="1">${plain(tops[0].total)}</b> ${t('after 10 rounds')} · ${esc(rulesLine(g))}</p>
   </section>
@@ -945,15 +951,15 @@ function doneView(g) {
 // ---------- sheets ----------
 function renderSheet() {
   const s = S.sheet;
-  if (!s || (!['rules', 'member', 'pastgame', 'crewshare', 'newcrew'].includes(s.kind) && !S.game)) {
+  if (!s || (!['rules', 'member', 'pastgame', 'crewshare', 'newcrew', 'ask'].includes(s.kind) && !S.game)) {
     const wasOpen = !$sheet.hidden;
     $sheet.hidden = true; $sheet.innerHTML = '';
     if (wasOpen && S.opener?.isConnected) S.opener.focus({ preventScroll: true });
     S.opener = null;
     return;
   }
-  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
-  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew') }[s.kind];
+  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, ask: askSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
+  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew'), ask: S.ask?.title || '' }[s.kind];
   $sheet.hidden = false;
   const opening = $sheet.hidden;
   $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2 tabindex="-1">${esc(title)}</h2><button class="icon-btn outline" data-act="close" aria-label="${t('Close')}">${icon('close')}</button></div>${body}</div>`;
@@ -1000,13 +1006,20 @@ function editSheet(s) {
 
 function menuSheet() {
   const g = S.game, u = lastUndo(g);
-  return `<div class="menu-list">
+  return `<h2 class="t3 menu-h first">${t('This round')}</h2>
+  <div class="menu-list">
+    ${u ? `<button data-act="undo">${icon('undo')}${esc(undoLabel(u))}</button>` : ''}
     <button data-act="open-actfor">${icon('users')}${t('Enter for another player')}</button>
-    ${g.phase !== 'done' ? `<button data-act="roster">${icon('plus')}${t('Add or remove players')}</button>` : ''}
-    <button data-act="share">${icon('share')}${esc(t('Invite players (code & QR)'))}</button>
+  </div>
+  <h2 class="t3 menu-h">${t('Help')}</h2>
+  <div class="menu-list">
     <button data-act="cheat">${icon('cards')}${t('What beats what')}</button>
     <button data-act="rules">${icon('book')}${esc(t('Rules & scoring'))}</button>
-    ${u ? `<button data-act="undo">${icon('undo')}${esc(undoLabel(u))}</button>` : ''}
+  </div>
+  <h2 class="t3 menu-h">${t('Seat & game')}</h2>
+  <div class="menu-list">
+    ${g.phase !== 'done' ? `<button data-act="roster">${icon('plus')}${t('Add or remove players')}</button>` : ''}
+    <button data-act="share">${icon('share')}${esc(t('Invite players (code & QR)'))}</button>
     ${S.seat !== 'watch' && g.phase !== 'done' ? `<button data-act="change-crew">${avatarOf(S.seat) ? avatarTile(avatarOf(S.seat), 'menu-ava') : icon('users')}${t('Change character')}</button>` : ''}
     <button data-act="change-seat">${icon('swap')}${t('Switch player on this phone')}</button>
     ${S.seat !== 'watch' ? `<button data-act="table-mode">${icon('screen')}${t('Use as the table scoreboard')}</button>` : ''}
@@ -1018,6 +1031,18 @@ function menuSheet() {
   </div>
   ${langPicker()}
   <p class="small muted" style="margin:12px 2px 0">${S.seat === 'watch' ? t('You are the table screen.') : t('You are {name}.', { name: `<b>${esc(name(S.seat))}</b>` })} ${esc(rulesLine(g))}. ${t(S.store.live ? 'Live sync on.' : 'Local mode: this device only.')}</p>`;
+}
+
+// ---------- confirmations: a themed sheet instead of the browser's confirm() ----------
+function ask(title, body, yes) {
+  S.ask?.res(false);
+  return new Promise(res => { S.ask = { title, body, yes, res }; S.sheet = { kind: 'ask' }; renderSheet(); });
+}
+function askSheet() {
+  const a = S.ask;
+  return a ? `<p style="margin-top:0">${esc(a.body)}</p>
+    <button class="btn primary" data-act="ask-yes">${esc(a.yes)}</button>
+    <button class="btn ghost" data-act="close">${t('Cancel')}</button>` : '';
 }
 
 // ---------- crews: a friend group's shared history ----------
@@ -1033,6 +1058,7 @@ function watchCrew(code) {
   S.crewWatching = code; S.crew = undefined; S.crewAll = false;
   S.crewUnsub = S.store.subscribeCrew(code, c => {
     S.crew = c;
+    if (c && S.quickStart === code && S.crewCode === code) { S.quickStart = null; actions['crew-new'](); return; }
     if (c) {
       // This phone now belongs to the crew: show it on the home screen.
       const list = myCrews().filter(x => x.code !== code);
@@ -1102,16 +1128,18 @@ function crewHomeView(c) {
   const champ = crewChampion(c), rec = records(c), past = pastSeasons(c);
   const live = c.current && !c.games?.[c.current] ? c.current : null;
   const shown = S.crewAll ? games : games.slice(0, 8);
-  const recLine = (k, label, fmt) => rec[k] ? `<li>${icon({ highGame: 'up', lowGame: 'down', bigRound: 'streak', badRound: 'kraken', streak: 'target', wins: 'crown' }[k])}<span>${t(label)}: <b>${esc(mname(rec[k].member))}</b> ${fmt(rec[k])} <small>· ${fmtDate(rec[k].at)}</small></span></li>` : '';
+  const recLine = (k, label, fmt) => rec[k] ? `<li>${icon({ highGame: 'up', lowGame: 'down', bigRound: 'streak', badRound: 'down', streak: 'target', wins: 'crown' }[k])}<span>${t(label)}: <b>${esc(mname(rec[k].member))}</b> ${fmt(rec[k])} <small>· ${fmtDate(rec[k].at)}</small></span></li>` : '';
   return `
   <div class="crew-top"><button class="link" data-act="home">${icon('exit', 'sm')}<span>${t('Home')}</span></button>
     <button class="code-chip" data-act="crew-share" aria-label="${t('Invite to the crew')}">${icon('share', 'sm')}${esc(S.crewCode)}</button></div>
-  <section class="crew-hero"><small>${t('Crew')}</small><h1>${esc(c.name)}</h1>
+  <section class="crew-hero"><h1>${esc(c.name)}</h1>
     <p>${tn(games.length, '{n} game played', '{n} games played')} · ${t('Season {n}', { n: season })}</p></section>
   ${champ && c.members?.[champ] ? `<div class="card scored nailed champ"><div class="outcome">${avatarTile('skullking')}<div class="what">${t('{name} won the last game', { name: esc(mname(champ)) })}
     <small>${t('They sail as the Skull King next game.')}</small></div></div></div>` : ''}
   ${live ? `<button class="btn" data-act="open-game" data-code="${live}">${icon('lead')} ${t('Back to game {code}', { code: live })}</button>` : ''}
   <button class="btn primary" data-act="crew-new">${icon('plus')} ${t('New game')}</button>
+
+  ${seasonChart(c, season)}
 
   <div class="section-h"><h2 class="t3">${t('Leaderboard')}</h2></div>
   <div class="seg crew-seg" role="radiogroup" aria-label="${t('Leaderboard')}">
@@ -1125,35 +1153,76 @@ function crewHomeView(c) {
     <p class="small muted" style="margin:8px 2px 0">${t('Ranked by wins, then win rate, then average score. Tap a name for their stats.')}</p>`
     : `<p class="note">${t(tab === 'all' || !games.length ? 'No finished games yet. Play all 10 rounds and the game lands here.' : 'No games this season yet.')}</p>`}
 
-  ${games.length ? `<div class="card"><h2 class="t3">${t('Records')}</h2><ul class="hl records">
+  ${games.length ? `<details class="fold"><summary><h2 class="t3">${t('Records')}</h2>${icon('lead', 'sm')}</summary><ul class="hl records">
     ${recLine('highGame', 'Highest score', x => plain(x.value))}
     ${recLine('bigRound', 'Biggest round', x => `${signed(x.value)} (${t('Round {r}', { r: x.round })})`)}
     ${recLine('streak', 'Longest bid streak', x => tn(x.value, '{n} in a row', '{n} in a row'))}
     ${recLine('wins', 'Most wins in a row', x => tn(x.value, '{n} game', '{n} games'))}
     ${recLine('badRound', 'Worst round', x => `${signed(x.value)} (${t('Round {r}', { r: x.round })})`)}
     ${recLine('lowGame', 'Lowest score', x => plain(x.value))}
-  </ul></div>` : ''}
+  </ul></details>` : ''}
 
   ${games.length ? `<div class="section-h"><h2 class="t3">${t('Games')}</h2><span>${tn(games.length, '{n} game', '{n} games')}</span></div>
   <div class="board game-log">${shown.map(g => {
     const rows = gameRows(g), w = rows.filter(x => x.place === 1);
     return `<button class="prow" data-act="pastgame" data-code="${g.code}">${memberTile(c.members?.[w[0]?.member] || { name: w[0]?.name, avatar: w[0]?.avatar })}
       <div class="who"><b><span class="nm">${t('{name} won', { name: esc(w.map(x => x.name).join(' & ')) })}</span></b><span>${fmtDate(g.at)} · ${tn(rows.length, '{n} player', '{n} players')}${g.season !== season ? ` · ${t('Season {n}', { n: g.season })}` : ''}</span></div>
-      <span class="total">${plain(w[0]?.total ?? 0)}</span></button>`;
+      <span class="total">${plain(w[0]?.total ?? 0)}</span>${icon('lead', 'sm chev')}</button>`;
   }).join('')}</div>
   ${games.length > shown.length ? `<button class="link" data-act="crew-more">${t('Show all {n} games', { n: games.length })}</button>` : ''}` : ''}
 
-  ${past.length ? `<div class="section-h"><h2 class="t3">${t('Past seasons')}</h2></div>
+  ${past.length ? `<details class="fold"><summary><h2 class="t3">${t('Past seasons')}</h2>${icon('lead', 'sm')}</summary>
   <div class="board">${past.map(s => `<div class="prow">${memberTile(c.members?.[s.champion])}
     <div class="who"><b>${t('Season {n}', { n: s.n })}</b><span>${fmtDate(s.start)} – ${fmtDate(s.end)} · ${tn(s.games, '{n} game', '{n} games')}</span></div>
-    <span class="chip">${icon('crown')}${esc(s.champion ? mname(s.champion) : '–')}</span></div>`).join('')}</div>` : ''}
+    <span class="chip">${icon('crown')}${esc(s.champion ? mname(s.champion) : '–')}</span></div>`).join('')}</div></details>` : ''}
 
   <div class="crew-actions">
     <button class="btn" data-act="crew-share">${icon('share')} ${t('Invite to the crew')}</button>
     <button class="btn ghost" data-act="new-season">${icon('streak')} ${t('Start a new season')}</button>
     <button class="btn ghost" data-act="forget-crew">${icon('exit')} ${t('Remove this crew from this phone')}</button>
-  </div>
-  ${langPicker()}`;
+  </div>`;
+}
+
+// The season as a voyage chart: each game a sounding along the bottom, each sailor a line of
+// wins so far, ending on their character. Same dash patterns and colours as the game chart.
+function seasonChart(c, season) {
+  const games = crewGames(c, season).reverse();
+  if (!games.length) return '';
+  const board = leaderboard(c, season), ids = board.map(x => x.member);
+  const n = games.length, W = 340, H = 170, L = 26, R = 30, T = 14, B = 22;
+  const lines = Object.fromEntries(ids.map(m => [m, [0]]));
+  for (const g of games) {
+    const won = new Set(gameRows(g).filter(x => x.place === 1).map(x => x.member));
+    for (const m of ids) { const a = lines[m]; a.push(a[a.length - 1] + (won.has(m) ? 1 : 0)); }
+  }
+  const hi = Math.max(1, ...ids.map(m => lines[m][n]));
+  const x = i => L + (i / n) * (W - L - R), y = v => T + (1 - v / hi) * (H - T - B);
+  const colr = (m, i) => CREW[c.members?.[m]?.avatar]?.color || COLORS[i % COLORS.length];
+  let grid = '';
+  for (let v = 0; v <= hi; v++) grid += `<line class="${v ? 'grid' : 'zero'}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  games.forEach((g, i) => { grid += `<text x="${x(i + 1)}" y="${H - 6}" text-anchor="middle">${i + 1}</text>`; });
+  // Lift end markers apart when lines finish on the same number.
+  const ends = spreadEnds(ids.map(m => ({ m, y: y(lines[m][n]) - 7 })), 15, T - 6, H - B - 8);
+  const paths = ids.map((m, i) => {
+    const pts = lines[m].map((v, j) => `${x(j).toFixed(1)},${(y(v) + (i - (ids.length - 1) / 2) * 1.6).toFixed(1)}`).join(' ');
+    const a = c.members?.[m]?.avatar, ey = ends.find(e => e.m === m).y, ex = x(n) + 4;
+    const mark = CREW[a] ? `<svg x="${ex}" y="${ey}" width="14" height="14" viewBox="0 0 16 16" shape-rendering="crispEdges">${spriteRects(a)}</svg>`
+      : `<circle cx="${ex + 7}" cy="${ey + 7}" r="7" fill="${colr(m, i)}"/><text x="${ex + 7}" y="${ey + 11}" text-anchor="middle" class="ini">${esc(mname(m).slice(0, 1).toUpperCase())}</text>`;
+    return `<polyline points="${pts}" fill="none" stroke="${colr(m, i)}" stroke-width="2.25" stroke-dasharray="${DASHES[i % 8]}" stroke-linejoin="round" stroke-linecap="round"/>${mark}`;
+  }).join('');
+  return `<div class="card voyage"><div class="section-h" style="margin:0 0 6px"><h2 class="t3">${t('Season {n} voyage', { n: season })}</h2><span>${t('wins after each game')}</span></div>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Wins so far this season')}: ${esc(board.map(b => `${b.name} ${b.wins}`).join(', '))}">${grid}${paths}</svg>
+    <div class="legend">${ids.map((m, i) => `<span><svg class="dash" viewBox="0 0 24 4" aria-hidden="true"><line x1="1" y1="2" x2="23" y2="2" stroke="${colr(m, i)}" stroke-width="2.25" stroke-dasharray="${DASHES[i % 8]}" stroke-linecap="round"/></svg>${memberTile(c.members?.[m])}${esc(mname(m))}</span>`).join('')}</div></div>`;
+}
+
+// Push labels apart (top to bottom) so none sit closer than `gap`, keeping them inside [lo, hi].
+function spreadEnds(items, gap, lo, hi) {
+  const s = [...items].sort((a, b) => a.y - b.y);
+  for (let i = 1; i < s.length; i++) s[i].y = Math.max(s[i].y, s[i - 1].y + gap);
+  const over = s.length ? s[s.length - 1].y - hi : 0;
+  if (over > 0) { for (const e of s) e.y -= over; for (let i = s.length - 2; i >= 0; i--) s[i].y = Math.min(s[i].y, s[i + 1].y - gap); }
+  for (const e of s) e.y = Math.max(lo, e.y);
+  return s;
 }
 
 function memberSheet(s) {
@@ -1161,7 +1230,7 @@ function memberSheet(s) {
   if (!x) return '';
   const st = playerStats(c, s.m);
   const cell = (label, value, sub = '') => `<div class="stat"><span>${t(label)}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
-  return `<div class="member-head">${memberTile(x, 'big')}<div><b>${esc(x.name)}</b>
+  return `<div class="member-head">${memberTile(x, 'big')}<div><b>${esc(x.name)}</b><small>${t('All games with {crew}', { crew: esc(c.name) })}</small>
     ${st.title ? `<span>${icon(st.title.icon, 'sm')}${t(st.games > 1 ? 'Usually: {title}' : 'Title: {title}', { title: esc(st.title.title) })}</span>` : ''}</div></div>
   ${st.games ? `<div class="stats">
     ${cell('Games', st.games)}${cell('Wins', st.wins, pct(st.rate))}
@@ -1171,11 +1240,11 @@ function memberSheet(s) {
     ${cell('Zero bids nailed', st.zeros)}
     ${cell('Favourite character', st.favourite ? `<span class="fav">${avatarTile(st.favourite)}${esc(t(CREW[st.favourite].name))}</span>` : '–')}
   </div>
-  ${st.rivals.length ? `<h3 class="t3" style="margin:18px 2px 8px">${t('Head to head')}</h3>
+  ${st.rivals.length ? `<div class="section-h"><h3 class="t3">${t('Head to head')}</h3><span>${t('ahead – behind')}</span></div>
     <div class="board rivals">${st.rivals.map(v => `<div class="prow">${memberTile(c.members?.[v.member])}
       <div class="who"><b><span class="nm">${t('vs {name}', { name: esc(mname(v.member)) })}</span></b><span>${tn(v.together, '{n} game together', '{n} games together')}</span></div>
       <span class="h2h" aria-label="${t('Finished ahead {a} times, behind {b} times', { a: v.ahead, b: v.behind })}"><b class="${v.ahead > v.behind ? 'good-t' : v.ahead < v.behind ? 'bad-t' : ''}">${v.ahead}–${v.behind}</b></span></div>`).join('')}</div>
-    <p class="small muted" style="margin:8px 2px 0">${t('Times finished ahead – behind.')}</p>` : ''}`
+` : ''}`
     : `<p class="note">${t('No finished games yet.')}</p>`}`;
 }
 
@@ -1215,9 +1284,9 @@ function rosterSheet() {
   const g = S.game, r = g.round, ps = sortedPlayers(g).filter(p => !gone(g, p));
   const from = joinRound(g), full = !PIDS.some(id => !g.players[id]);
   const status = p => {
-    if (p.left != null) return `<span class="chip">${t('Leaves after this round')}</span><button class="link" data-act="keep-player" data-id="${p.id}">${t('Keep')}</button>`;
-    if ((p.from || 1) > r && g.phase !== 'lobby') return `<span class="chip">${t('Joins round {r}', { r: p.from })}</span><button class="link" data-act="rm-player" data-id="${p.id}">${t('Remove')}</button>`;
-    return `<button class="link" data-act="rm-player" data-id="${p.id}">${t('Remove')}</button>`;
+    if (p.left != null) return `<span class="chip">${t('Leaves after this round')}</span><button class="btn mini" data-act="keep-player" data-id="${p.id}">${t('Keep')}</button>`;
+    if ((p.from || 1) > r && g.phase !== 'lobby') return `<span class="chip">${t('Joins round {r}', { r: p.from })}</span><button class="btn mini" data-act="rm-player" data-id="${p.id}" aria-label="${t('Remove {name}', { name: esc(p.name) })}">${t('Remove')}</button>`;
+    return p.id === S.seat ? `<span class="chip">${t('You')}</span>` : `<button class="btn mini" data-act="rm-player" data-id="${p.id}" aria-label="${t('Remove {name}', { name: esc(p.name) })}">${t('Remove')}</button>`;
   };
   return `<div class="board roster">${ps.map(p => `<div class="prow" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span></b></div><span class="roster-act">${status(p)}</span></div>`).join('')}</div>
@@ -1253,7 +1322,7 @@ function addPlayer(nm) {
   toast(from > 1 ? t('{name} joins from round {r}', { name: nm, r: from }) : t('{name} joined the crew', { name: nm }));
 }
 
-function removePlayer(pid) {
+async function removePlayer(pid) {
   const g = S.game, r = g.round, p = g.players[pid];
   const now = g.phase === 'lobby' || g.phase === 'bidding' || (p.from || 1) > r;
   const left = now ? Math.max(r, p.from || 1) : r + 1;
@@ -1261,7 +1330,10 @@ function removePlayer(pid) {
   const msg = g.phase === 'lobby' || (p.from || 1) > r ? t('Remove {name} from the game?', { name: p.name })
     : g.phase === 'bidding' ? t('{name} leaves now and sits out this round. If the cards are already dealt, deal again without them.', { name: p.name })
     : t('{name} leaves after this round. Their score so far stays on the board.', { name: p.name });
-  if (!confirm(msg)) return;
+  const back = S.sheet;
+  const ok = ask(t('Remove {name}?', { name: p.name }), msg, t('Remove'));
+  S.ask.back = back;
+  if (!(await ok)) return;
   const patch = { [`players/${pid}/left`]: left };
   if (g.phase === 'bidding') Object.assign(patch, { [`bids/${r}/${pid}`]: null, [`cannon/${r}/${pid}`]: null });
   update(patch);
@@ -1330,6 +1402,10 @@ function rulesSheet() {
 function cheatSheet() {
   const g = S.game, exp = g?.expansions || {};
   const swatch = (cls, n = '14') => `<span class="suit ${cls}" aria-hidden="true">${n}</span>`;
+  // Card faces, not crew characters: a card-shaped tile with the card's own mark.
+  const face = (cls, mark) => `<span class="card-face ${cls}" aria-hidden="true">${mark}</span>`;
+  const king = face('king', '<svg viewBox="0 0 64 64"><use href="#i-mark"/></svg>'), pirate = face('pirate', icon('swords')),
+    mermaid = face('mermaid', icon('tail')), escape = face('escape', icon('flag'));
   const step = (art, title, line) => `<li>${art}<div><b>${esc(t(title))}</b><span>${esc(t(line))}</span></div></li>`;
   const notes = [
     'Tigress: you choose. Play her as a Pirate or as an Escape.',
@@ -1341,17 +1417,17 @@ function cheatSheet() {
   ];
   return `<p class="small muted" style="margin-top:0">${t('Strongest at the top. Follow the suit that was led if you can; special cards can always be played.')}</p>
   <ol class="ladder">
-    ${step(avatarTile('skullking'), 'Skull King', 'Beats Pirates and everything below')}
-    ${step(avatarTile('captain'), 'Pirate', 'Beats Mermaids and every number')}
-    ${step(avatarTile('coralia'), 'Mermaid', 'Beats every number')}
+    ${step(king, 'Skull King', 'Beats Pirates and everything below')}
+    ${step(pirate, 'Pirate', 'Beats Mermaids and every number')}
+    ${step(mermaid, 'Mermaid', 'Beats every number')}
     ${step(swatch('black'), 'Black suit (trump)', 'Beats any coloured card')}
     ${step(`<span class="suits">${swatch('yellow', '')}${swatch('purple', '')}${swatch('green')}</span>`, 'Yellow, purple, green', 'Highest card of the suit that was led')}
-    ${step(avatarTile('escape'), 'Escape', 'Always loses')}
+    ${step(escape, 'Escape', 'Always loses')}
   </ol>
   <div class="twist">
     <p><b>${t('The twist')}</b> ${t('The Mermaid catches the Skull King.')}</p>
     <div class="cycle" role="img" aria-label="${t('Skull King beats Pirate, Pirate beats Mermaid, Mermaid beats Skull King')}">
-      ${avatarTile('skullking')}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${avatarTile('captain')}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${avatarTile('coralia')}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${avatarTile('skullking')}
+      ${king}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${pirate}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${mermaid}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${king}
     </div>
   </div>
   <ul class="hl">${notes.map(n => `<li>${icon('check', 'sm')}<span>${esc(t(n))}</span></li>`).join('')}</ul>`;
@@ -1386,6 +1462,13 @@ const actions = {
   rules() { S.sheet = { kind: 'rules' }; renderSheet(); },
   'new-crew'() { S.sheet = { kind: 'newcrew' }; renderSheet(); },
   'open-crew'(el) { S.sheet = null; location.hash = `crew=${el.dataset.c}`; window.scrollTo(0, 0); },
+  // Home's "New game with <crew>": open the crew and go straight to its game setup once it loads.
+  'crew-quick'(el) {
+    const c = el.dataset.c;
+    S.quickStart = c; location.hash = `crew=${c}`;
+    // Already following this crew: no fresh load will arrive, so start right away.
+    if (S.crew && S.crewWatching === c) { S.crewCode = c; S.quickStart = null; actions['crew-new'](); }
+  },
   'crew-new'() {
     const c = S.crew, seat = usualSeating(c), last = crewGames(c)[0];
     const members = seat.recent.length ? seat.recent : seat.others.slice(0, 8);
@@ -1399,21 +1482,22 @@ const actions = {
   'crew-more'() { S.crewAll = true; render(); },
   member(el) { S.sheet = { kind: 'member', m: el.dataset.m }; renderSheet(); },
   pastgame(el) { S.sheet = { kind: 'pastgame', code: el.dataset.code }; renderSheet(); },
-  'new-season'() {
+  async 'new-season'() {
     const c = S.crew, n = c.season?.n || 1;
-    if (!confirm(t('Start season {n}? The current leaderboard is saved with its champion and a fresh one begins.', { n: n + 1 }))) return;
+    if (!(await ask(t('Start season {n}?', { n: n + 1 }), t('Start season {n}? The current leaderboard is saved with its champion and a fresh one begins.', { n: n + 1 }), t('Start season {n}', { n: n + 1 })))) return;
     S.store.updateCrew(S.crewCode, { season: { n: n + 1, start: Date.now() }, [`seasons/${n}`]: { start: c.season?.start || c.createdAt, end: Date.now() } })
       .then(() => toast(t('Season {n} has begun', { n: n + 1 }))).catch(() => toast(t("Couldn't save that. Check your connection.")));
   },
-  'forget-crew'() {
-    if (!confirm(t('Remove {name} from this phone? The crew and its history stay; you can rejoin with the code.', { name: S.crew?.name || '' }))) return;
+  async 'forget-crew'() {
+    if (!(await ask(t('Remove {name}?', { name: S.crew?.name || '' }), t('Remove {name} from this phone? The crew and its history stay; you can rejoin with the code.', { name: S.crew?.name || '' }), t('Remove')))) return;
     saveCrews(myCrews().filter(c => c.code !== S.crewCode));
     location.hash = '';
   },
-  'remove-game'(el) {
-    if (!confirm(t('Remove this game from the history?'))) return;
-    S.store.updateCrew(S.crewCode, { [`games/${el.dataset.code}`]: null });
-    S.sheet = null; renderSheet(); toast(t('Removed'));
+  async 'remove-game'(el) {
+    const code = el.dataset.code, ok = ask(t('Remove this game from the history?'), t('Its scores leave the leaderboard and stats. This can’t be undone.'), t('Remove'));
+    if (!(await ok)) return;
+    S.store.updateCrew(S.crewCode, { [`games/${code}`]: null });
+    toast(t('Removed'));
   },
   cheat() { S.sheet = { kind: 'cheat' }; renderSheet(); },
   roster() { S.sheet = { kind: 'roster' }; renderSheet(); },
@@ -1436,10 +1520,14 @@ const actions = {
   scores() { S.sheet = { kind: 'scores' }; renderSheet(); },
   menu() { S.sheet = { kind: 'menu' }; renderSheet(); },
   share() { S.sheet = { kind: 'share' }; renderSheet(); },
-  close() { if (S.sheet?.kind === 'edit') delete S.drafts[`${S.sheet.r}:${S.sheet.id}`]; S.sheet = null; renderSheet(); },
-  seat(el) {
+  close() {
+    if (S.sheet?.kind === 'edit') delete S.drafts[`${S.sheet.r}:${S.sheet.id}`];
+    const a = S.ask; S.ask = null; S.sheet = a?.back || null; renderSheet(); a?.res(false);
+  },
+  'ask-yes'() { const a = S.ask; S.ask = null; S.sheet = a?.back || null; renderSheet(); a?.res(true); },
+  async seat(el) {
     const id = el.dataset.id, holder = S.game.presence?.[id];
-    if (id !== 'watch' && holder && holder !== DEVICE && !confirm(t('{name} is already open on another phone. Take over this seat here?', { name: name(id) }))) return;
+    if (id !== 'watch' && holder && holder !== DEVICE && !(await ask(t('Take over this seat?'), t('{name} is already open on another phone. Take over this seat here?', { name: name(id) }), t('Take over')))) return;
     S.seat = id; saveSeat(S.code, id);
     if (id !== 'watch') { S.claimed = id; S.store.claim(S.code, id, DEVICE).catch(() => {}); }
     render();

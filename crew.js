@@ -50,6 +50,9 @@ export function leaderboard(crew, season = null) {
   return rows;
 }
 
+// Teasing awards belong to the night they happened, not to someone's crew profile.
+const TEASING = new Set(['kraken', 'wreck']);
+
 // Everything about one member across all games.
 export function playerStats(crew, member) {
   const games = crewGames(crew);
@@ -66,7 +69,7 @@ export function playerStats(crew, member) {
       if (g.bids?.[r]?.[me.pid] === 0 && g.results?.[r]?.[me.pid]?.tricks === 0) s.zeros++;
     }
     if (me.avatar) s.characters[me.avatar] = (s.characters[me.avatar] || 0) + 1;
-    if (me.award) { const k = me.award.award; (s.titles[k] ||= { n: 0, ...me.award }).n++; }
+    if (me.award && !TEASING.has(me.award.award)) { const k = me.award.award; (s.titles[k] ||= { n: 0, ...me.award }).n++; }
     for (const o of rows) {
       if (o.member === member) continue;
       const v = s.rivals[o.member] ||= { member: o.member, together: 0, ahead: 0, behind: 0 };
