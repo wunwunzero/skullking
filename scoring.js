@@ -174,7 +174,7 @@ export function roundHighlights(game, round, name) {
     bid: game.bids?.[round]?.[p.id], res: game.results?.[round]?.[p.id] }));
 
   for (const x of scores) {
-    if (x.bid === 0 && x.res?.tricks === 0 && round >= 3) lines.push({ icon: 'target', text: t('{name} nailed a zero bid (+{n})', { name: name(x.id), n: x.s }) });
+    if (x.bid === 0 && x.res?.tricks === 0 && round >= 3) lines.push({ icon: 'target', id: x.id, kind: 'zero', text: t('{name} nailed a zero bid (+{n})', { name: name(x.id), n: x.s }) });
     if (x.res?.skullKing && x.s > 0) lines.push({ icon: 'crown', text: t("{name}'s Mermaid sank the Skull King (+40)", { name: name(x.id) }) });
   }
   const top = [...scores].sort((a, b) => b.s - a.s);

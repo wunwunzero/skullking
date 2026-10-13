@@ -787,3 +787,19 @@ body.table .standings { --lane-h: 50px; --lane-n: 50; }
 .card-face.mermaid .ico { color: #1a9bb0; }
 .card-face.escape .ico { color: var(--ink-2); }
 .cycle .card-face { width: 34px; height: 44px; }
+
+/* ---------- critique #4 ---------- */
+/* Glanceable from a phone lying flat on the table: the race and the row details step up a size. */
+.standings .tick { font-size: .85rem; }
+.standings .water-label { font-size: .8rem; }
+.prow .who > span { font-size: .875rem; }
+/* Comfortable taps: chips keep their size but get a 44px+ hit area (nudge already has one). */
+.code-chip { position: relative; }
+.code-chip::after { content: ''; position: absolute; inset: -4px -2px; }
+#top .icon-btn { min-width: 44px; padding: 0 6px; }
+/* Setup: the dealer control names itself */
+.name-row .deal .deal-hint { font-size: .78rem; color: var(--ink-3); }
+.name-row .deal { gap: 6px; }
+/* Lobby: QR shrinks once every seat is on a phone; Start lives in the dock */
+.card.share.joined .qr img { width: 112px; height: 112px; }
+p, .note { text-wrap: pretty; }

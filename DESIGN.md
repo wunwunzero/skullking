@@ -477,6 +477,9 @@ A crew page reached from a card at the top of the home screen ("Your crew", name
 - **Player stats sheet:** a 56px tile with their name and most common award title, then a two-column hairline grid of stat cells (Ink 2 label, 1.45rem italic sounding, Ink 3 sub-line), then Head to head rows with an italic "ahead–behind" score in Made Green / Miss Red.
 - **Crew game setup:** members appear as tinted name chips (not inputs) with their tile; absent members sit above as pill buttons to add back; every row after the first has an up arrow to fix the seating.
 
+### Lock In and Score
+Each player locks in their own round (tricks plus any bonuses) with the magenta "Lock in my round"; "No bonuses? Just tap Lock in." sits under it. The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
+
 ### Confirm Sheet
 Destructive or seat-taking choices (remove a player, take over a seat, start a season, remove a game or crew) use the bottom sheet, not the browser's confirm(): the question as the title, one plain sentence of consequence, the primary button naming the action ("Remove", "Take over"), then a ghost Cancel. Cancelling returns to the sheet you came from.
 

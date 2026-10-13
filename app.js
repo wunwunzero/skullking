@@ -305,7 +305,9 @@ function render() {
   else if (S.game === undefined) { $app.innerHTML = `<p class="loading">${t('Finding the ship…')}</p>`; }
   else if (S.game === null) {
     $app.innerHTML = `<div class="card"><h2>${t('No game “{code}”', { code: esc(S.code) })}</h2><p class="muted">${t('Check the code with whoever started the game.')}</p>
-      <button class="btn primary" data-act="home">${t('Back')}</button></div>`;
+      <form class="join" data-form="join" style="margin:14px 0"><input name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
+      <button class="btn ink">${t('Join')}</button></form>
+      <button class="btn ghost" data-act="home">${t('Back')}</button></div>`;
   }
   else if (!S.seat) { $app.innerHTML = seatView(); }
   else if (S.seat !== 'watch' && S.game.players?.[S.seat] && S.game.phase !== 'done' && (S.picking || (!avatarOf(S.seat) && !S.skipPick?.[S.code]))) { $app.innerHTML = crewView(); }
@@ -435,7 +437,7 @@ function setupView() {
         ${members[i] && crewData?.members?.[members[i]] ? `<span class="member-name">${memberTile(crewData.members[members[i]])}<b>${esc(n)}</b></span>`
           : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${t(crew ? 'Guest name' : 'Player {n}', { n: i + 1 })}" autocomplete="off" data-idx="${i}">`}
         ${i > 0 ? `<button type="button" class="x" data-act="move-up" data-i="${i}" aria-label="${t('Move {name} up', { name: esc(n || t('Player {n}', { n: i + 1 })) })}">${icon('up-arrow')}</button>` : '<span class="x-space"></span>'}
-        <button type="button" role="radio" aria-checked="${dealer === i}" aria-label="${t('{name} deals first', { name: esc(n || t('Player {n}', { n: i + 1 })) })}" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">${dealer === i ? `${icon('check', 'xs')}${t('Deals')}` : '<span class="radio-dot" aria-hidden="true"></span>'}</button>
+        <button type="button" role="radio" aria-checked="${dealer === i}" aria-label="${t('{name} deals first', { name: esc(n || t('Player {n}', { n: i + 1 })) })}" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">${dealer === i ? `${icon('check', 'xs')}${t('Deals')}` : `<span class="radio-dot" aria-hidden="true"></span><span class="deal-hint">${t('Deals')}</span>`}</button>
         ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${n ? t('Remove {name}', { name: esc(n) }) : t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : ''}
       </div>`).join('')}
     ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} ${t(crew ? 'Add a guest' : 'Add player')}</button>` : ''}
@@ -543,18 +545,19 @@ function actingBanner() {
 function shareURL() { return `${location.origin}${location.pathname}#${S.code}`; }
 function lobbyView(g) {
   const ps = playersIn(g, 1);
+  const seated = ps.filter(p => g.presence?.[p.id]).length;
   const champ = g.champion && g.players[g.champion];
   return `
   ${champ ? `<div class="card scored nailed"><div class="outcome">${icon('crown', 'crownmark')}<div class="what">${t('{name} won the last game', { name: esc(champ.name) })}
     <small>${t(g.champion === S.seat ? 'The Skull King is unlocked for you this game.' : 'Only they can sail as the Skull King this game.')}</small></div>
     ${g.champion === S.seat && avatarOf(S.seat) !== 'skullking' ? `<button class="btn" style="width:auto;margin-left:auto" data-act="pick-crew" data-c="skullking">${avatarTile('skullking')}${t('Claim')}</button>` : ''}</div></div>` : ''}
-  <div class="card share">
+  <div class="card share ${seated === ps.length ? 'joined' : ''}">
     <p class="muted small" style="margin:0">${t('Scan or open the link, then pick your name')}</p>
     <div class="big-code">${esc(S.code)}</div>
     <div class="qr" id="qr" aria-label="${t('QR code for the game link')}"></div>
     ${shareButtons()}
   </div>
-  <div class="section-h"><h2 class="t3">${t('Crew')}</h2><span>${tn(ps.length, '{n} player', '{n} players')}</span></div>
+  <div class="section-h"><h2 class="t3">${t('At the table')}</h2><span>${tn(ps.length, '{n} player', '{n} players')}</span></div>
   <div class="board">
     ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === dealerFor(g, 1) ? `<span class="badge">${t('deals first')}</span>` : ''}</b></div><span></span><span></span></div>`).join('')}
@@ -562,7 +565,8 @@ function lobbyView(g) {
   <button class="link" data-act="roster">${icon('users', 'sm')}<span>${t('Add or remove players')}</span></button>
   <p class="rules-line">${esc(rulesLine(g))}${g.crew && S.crew ? `<br>${t('Saved to {crew} when the game finishes.', { crew: esc(S.crew.name) })}` : ''}</p>
   <button class="btn ghost" data-act="rules">${icon('book')} ${esc(t('Rules & scoring'))}</button>
-  <button class="btn primary" style="margin-top:8px" data-act="start">${t('Start round 1')}</button>`;
+  <div class="dock"><p class="status-line ${seated === ps.length ? 'ok' : ''}">${icon(seated === ps.length ? 'check' : 'phone', 'sm')}<span>${t('{n} of {m} phones joined', { n: seated, m: ps.length })}</span></p>
+    <button class="btn primary" data-act="start">${t('Start round 1')}</button></div>`;
 }
 function shareButtons(url = '') {
   const u = url ? ` data-url="${esc(url)}"` : '';
@@ -636,7 +640,7 @@ function lastRoundBanner(g) {
   const r = g.round - 1;
   if (r < 1 || g.phase !== 'bidding' || (g.bids?.[g.round] && Object.keys(g.bids[g.round]).length)) return '';
   const tot = totals(g), mine = meIn(g, r);
-  const lines = roundHighlights(g, r, name);
+  const lines = roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero'));
   const myScore = mine ? tot[mine].rounds[r] : null;
   const myBid = mine ? g.bids?.[r]?.[mine] : null, myTricks = mine ? g.results?.[r]?.[mine]?.tricks : null;
   const nailed = mine && myBid != null && myBid === myTricks;
@@ -679,8 +683,8 @@ function biddingView(g) {
         <button class="btn" data-act="change-bid">${t('Change')}</button></div></div>`
     : `<div class="card action">
     <h2 class="t3">${S.actingFor ? t("{name}'s bid", { name: esc(name(mine)) }) : t('Your bid')} · ${tn(r, '{n} card', '{n} cards')}</h2>
-    <p class="muted small" style="margin:0">${teach} <button class="link inline" data-act="rules">${t('How scoring works')}</button></p>
-    <div class="bid-grid" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}">${n}</button>`).join('')}</div>
+    <p class="muted small" style="margin:0">${teach} <button class="link inline" data-act="rules">${t('How scoring works')}</button> · <button class="link inline" data-act="cheat">${t('What beats what')}</button></p>
+    <div class="bid-grid" role="group" aria-label="${t('Your bid')}" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}" aria-label="${tn(n, 'Bid {n} trick', 'Bid {n} tricks')}">${n}</button>`).join('')}</div>
     ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="${t('Rascal wager')}">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}${t('Grapeshot')}</b><span>${t('{n} pts · half if off by 1', { n: 10 * r })}</span></button>
       <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>${icon('cannon', 'sm')}${t('Cannonball')}</b><span>${t('{n} pts · all or nothing', { n: 15 * r })}</span></button>
@@ -824,8 +828,8 @@ function effectiveResults(g, r) {
 function stepper(act, key, label, hint, val, max) {
   const bare = esc(label.replace(/<[^>]+>/g, '').trim());
   return `<div class="stepper"><div class="lbl"><b>${label}</b>${hint ? `<span>${hint}</span>` : ''}</div>
-    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="${t('Less {x}', { x: bare })}">${icon('minus')}</button>
-    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="${t('More {x}', { x: bare })}">${icon('plus')}</button></div></div>`;
+    <div class="ctl"><button type="button" data-act="${act}" data-k="${key}" data-d="-1" ${val <= 0 ? 'disabled' : ''} aria-label="${t('{x}, minus one', { x: bare })}">${icon('minus')}</button>
+    <output>${val}</output><button type="button" data-act="${act}" data-k="${key}" data-d="1" ${val >= max ? 'disabled' : ''} aria-label="${t('{x}, plus one', { x: bare })}">${icon('plus')}</button></div></div>`;
 }
 
 function resultForm(g, r, pid) {
@@ -840,8 +844,8 @@ function resultForm(g, r, pid) {
       : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${t('Add bonuses: 14s you captured, Pirates, Mermaids or the Skull King you caught')}${g.expansions?.loot ? `, ${t('Loot')}` : ''}</span></button>`}
     ${open && !made ? `<p class="small muted" style="margin:4px 0 0">${t(g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.')}</p>` : ''}
     <div class="preview"><span class="muted">${t('This round')}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
-    <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? `${icon('check')}${t('Confirmed')}` : t('Confirm')}</button>
-    ${confirmed ? '' : `<p class="small muted" style="margin:8px 2px 0">${t('No bonuses? You can skip this: your trick count is already in.')}</p>`}`;
+    <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? `${icon('check')}${t('Locked in')}` : t('Lock in my round')}</button>
+    ${confirmed ? '' : `<p class="small muted" style="margin:8px 2px 0">${t('No bonuses? Just tap Lock in.')}</p>`}`;
 }
 const bonusStepper = (act, k, val, hint) =>
   stepper(act, k, `${esc(t(BONUS[k].label))} <span class="muted small">+${BONUS[k].pts}</span>`, hint ? esc(t(BONUS[k].hint)) : '', val, BONUS[k].max);
@@ -854,11 +858,14 @@ function resultsView(g) {
   const inCount = ps.filter(p => eff[p.id]).length;
   const tot = totals(g), watch = S.seat === 'watch' && !S.actingFor;
   const myPending = mine && (!g.results?.[r]?.[mine] || S.drafts[`${r}:${mine}`]);
-  // Score is the table's action: quiet while your own card still needs you, magenta once the counts reconcile.
-  const ready = allIn && sum === n;
-  const counts = t('{n} of {m} in', { n: inCount, m: ps.length });
-  const status = myPending && allIn ? t('Confirm your round above, then score')
-    : !allIn ? `${counts} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
+  // Score is the table's action. It turns magenta only once everyone has locked in their round
+  // (tricks plus any bonuses); before that, scoring asks first so nobody's bonus is lost.
+  const unlocked = ps.filter(p => eff[p.id]?.src !== 'confirmed');
+  const ready = allIn && sum === n && !unlocked.length;
+  const counts = t('{n} of {m} locked in', { n: ps.length - unlocked.length, m: ps.length });
+  const status = myPending ? t('Lock in your round above')
+    : !allIn ? `${t('{n} of {m} in', { n: inCount, m: ps.length })} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
+    : unlocked.length ? `${counts} · ${t('waiting on {names}', { names: unlocked.map(p => esc(p.name)).join(', ') })}`
     : `${counts} · ${t(sum === n ? 'tricks add up' : "tricks don't add up")}`;
   const srcLabel = e => t(!e ? 'waiting' : e.src === 'confirmed' ? 'confirmed' : e.src === 'live' ? 'from taps' : 'auto-filled');
   return `
@@ -871,14 +878,14 @@ function resultsView(g) {
       const made = e && bid === e.tricks;
       return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
         <div class="who"><b><span class="nm">${esc(p.name)}</span></b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b> · ${srcLabel(e)}</span></div>
-        ${e ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : nudgeChip(p.id, mine)}
+        ${e && e.src === 'confirmed' ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : nudgeChip(p.id, mine)}
         <span class="total">${plain(tot[p.id].total + (s || 0))}</span></div>`;
     }).join('')}${tableFill(ps.length)}
   </div>
   ${(g.expansions?.kraken || g.expansions?.whale) && !watch && me() === dealerFor(g, r) ? destroyCard(destroyed, false) : ''}
   ${allIn && sum !== n ? `<div class="warnbox">${icon('x')}<span>${tn(n, 'The tricks add up to {sum}, but {n} was won this round', 'The tricks add up to {sum}, but {n} were won this round', { sum })}${destroyed ? ` (${t('{r} played, {d} destroyed', { r, d: destroyed })})` : ''}. ${t('Check the "won" numbers above; tap a player\'s chip in Scores to fix it later.')}</span></div>` : ''}
   ${watch ? '' : `<div class="dock"><p class="status-line ${ready ? 'ok' : ''}">${icon(ready ? 'check' : 'bell', 'sm')}<span>${status}</span></p>
-  <button class="btn ${ready && !myPending ? 'primary' : ''}" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? t('Score anyway') : r === ROUNDS ? t('Score final round') : t('Score round {r}', { r })}</button></div>`}`;
+  <button class="btn ${ready ? 'primary' : ''}" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? t('Score anyway') : !ready ? t('Score now') : r === ROUNDS ? t('Score final round') : t('Score round {r}', { r })}</button></div>`}`;
 }
 
 // ---------- done ----------
@@ -939,10 +946,10 @@ function doneView(g) {
   <div class="board podium" style="margin-top:8px">
     ${rank.map(r => { const left = g.players[r.id].left; return `<div class="prow ${r.id === S.seat ? 'me' : ''}" style="--crew:${color(r.id)}"><span class="place">${r.place}</span>${flag(r.id)}<div class="who"><b><span class="nm">${esc(r.name)}</span>${r.place === 1 ? icon('crown', 'sm') : ''}</b>${left ? `<span>${t('Left after round {r}', { r: left - 1 })}</span>` : ''}</div><span class="total">${plain(r.total)}</span></div>`; }).join('')}
   </div>
+  <button class="btn primary" data-act="rematch" style="margin-top:14px">${t('Rematch, same crew')}</button>
+  ${g.crew && S.crew ? `<button class="btn" data-act="open-crew" data-c="${g.crew}">${icon('users')} ${t('Saved to {crew}: see the history', { crew: esc(S.crew.name) })}</button>` : ''}
   ${awardsCard(g)}
   <div class="card"><h2 class="t3">${t('The voyage')}</h2>${chartSVG(g)}</div>
-  ${g.crew && S.crew ? `<button class="btn" data-act="open-crew" data-c="${g.crew}">${icon('users')} ${t('Saved to {crew}: see the history', { crew: esc(S.crew.name) })}</button>` : ''}
-  <button class="btn primary" data-act="rematch">${t('Rematch, same crew')}</button>
   <button class="btn" data-act="scores">${icon('chart')} ${t('Round-by-round table')}</button>
   <button class="btn ghost" data-act="home">${t('Home')}</button>
   ${undoCard(g)}`;
@@ -954,18 +961,26 @@ function renderSheet() {
   if (!s || (!['rules', 'member', 'pastgame', 'crewshare', 'newcrew', 'ask'].includes(s.kind) && !S.game)) {
     const wasOpen = !$sheet.hidden;
     $sheet.hidden = true; $sheet.innerHTML = '';
-    if (wasOpen && S.opener?.isConnected) S.opener.focus({ preventScroll: true });
-    S.opener = null;
+    $top.inert = false; $app.inert = false;
+    if (wasOpen) {
+      // Back to whatever opened the sheet (found again by its selector if the page was redrawn).
+      const back = S.opener?.isConnected ? S.opener : S.openerKey && document.querySelector(S.openerKey);
+      back?.focus({ preventScroll: true });
+    }
+    S.opener = null; S.openerKey = null;
     return;
   }
   const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, ask: askSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
   const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew'), ask: S.ask?.title || '' }[s.kind];
-  $sheet.hidden = false;
   const opening = $sheet.hidden;
+  if (opening) { S.opener = document.activeElement; S.openerKey = focusKey(); }
+  $sheet.hidden = false;
+  // Only the sheet is reachable while it is open.
+  $top.inert = true; $app.inert = true;
   $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2 tabindex="-1">${esc(title)}</h2><button class="icon-btn outline" data-act="close" aria-label="${t('Close')}">${icon('close')}</button></div>${body}</div>`;
   if (s.kind === 'share' || s.kind === 'crewshare') drawQR();
   if (s.kind === 'newcrew') $sheet.querySelector('input')?.focus();
-  if (opening) { S.opener = document.activeElement; $sheet.querySelector('h2')?.focus(); }
+  if (opening && s.kind !== 'newcrew') $sheet.querySelector('h2')?.focus();
 }
 
 function scoresSheet() {
@@ -1187,7 +1202,7 @@ function crewHomeView(c) {
 // wins so far, ending on their character. Same dash patterns and colours as the game chart.
 function seasonChart(c, season) {
   const games = crewGames(c, season).reverse();
-  if (!games.length) return '';
+  if (games.length < 3) return '';
   const board = leaderboard(c, season), ids = board.map(x => x.member);
   const n = games.length, W = 340, H = 170, L = 26, R = 30, T = 14, B = 22;
   const lines = Object.fromEntries(ids.map(m => [m, [0]]));
@@ -1613,10 +1628,14 @@ const actions = {
     delete S.drafts[key];
     if (S.actingFor) S.actingFor = null;
     update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
-    toast(t('Confirmed'));
+    toast(t('Locked in'));
   },
-  score() {
+  async score() {
     const g = S.game, r = g.round, eff = effectiveResults(g, r), patch = {};
+    const unlocked = playersIn(g, r).filter(p => eff[p.id]?.src !== 'confirmed');
+    if (unlocked.length && !(await ask(t('Score before everyone locks in?'),
+      t('{names} haven’t locked in yet. Their tapped tricks will count, with no bonuses.', { names: unlocked.map(p => p.name).join(', ') }), t('Score now')))) return;
+    if (S.game.phase !== 'results' || S.game.round !== r) return;
     for (const [pid, e] of Object.entries(eff)) {
       if (e.src === 'confirmed') continue;
       patch[`results/${r}/${pid}`] = { tricks: e.tricks };
