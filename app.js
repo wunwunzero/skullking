@@ -944,6 +944,9 @@ function effectiveResults(g, r) {
     const sum = Object.values(out).reduce((s, x) => s + x.tricks, 0);
     if (n - sum >= 0) out[missing[0].id] = { tricks: n - sum, src: 'auto' };
   }
+  // Anyone who never tapped won nothing; if the counts don't add up, the warning says so
+  // rather than waiting on players who have nothing to enter.
+  for (const p of ps) out[p.id] ||= { tricks: 0, src: 'live' };
   return out;
 }
 
@@ -984,7 +987,7 @@ function resultsView(g) {
   const myPending = false;
   const ready = allIn && sum === n;
   const status = !allIn ? `${t('{n} of {m} in', { n: inCount, m: ps.length })} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
-    : sum === n ? t('Tricks add up · add any bonuses, then score') : t("tricks don't add up");
+    : sum === n ? t('Tricks add up · add any bonuses, then score') : t("Tricks don't add up: check the numbers");
   const srcLabel = e => !e ? `<span class="src">${t('waiting')}</span>` : e.src === 'auto' ? `<span class="src">${t('auto-filled')}</span>` : '';
   return `
   ${standingsLine(g)}
