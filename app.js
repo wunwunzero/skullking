@@ -777,7 +777,7 @@ function roundSlim(g, r) {
     <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span>${icon('lead', 'chev')}</button>`;
 }
 // The whole round: your outcome, everyone's points, the highlights.
-function roundCard(g, r) {
+function roundCard(g, r, { inSheet = false } = {}) {
   const tot = totals(g), mine = meIn(g, r);
   const lines = roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero') && l.icon !== 'down');
   const myScore = mine ? tot[mine].rounds[r] : null;
@@ -791,12 +791,12 @@ function roundCard(g, r) {
     `<span>${flag(p.id)}${esc(p.name)} <b class="${tot[p.id].rounds[r] >= 0 ? 'good-t' : 'bad-t'}">${signed(tot[p.id].rounds[r])}</b></span>`).join('');
   return `<div class="card scored ${mine ? (nailed ? 'nailed' : myScore < 0 || (g.scoring === 'rascal' && myScore === 0) ? 'missed' : '') : ''}">
     ${mine ? '' : `<h2 class="t3">${t('Round {r} scored', { r })}</h2>`}${outcome}
-    ${rows ? `<div class="round-row">${mine ? `<span>${t('Round {r}', { r })}:</span>` : ''}${rows}</div>` : ''}
+    ${rows ? `<div class="round-row">${mine && !inSheet ? `<span>${t('Round {r}', { r })}:</span>` : ''}${rows}</div>` : ''}
     ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}</div>`;
 }
 function roundSheet(s) {
   const g = S.game, u = lastUndo(g);
-  return `${roundCard(g, s.r)}${u && /^.?\s*Undo scoring round/.test(u.label) ? undoCard(g) : ''}`;
+  return `${roundCard(g, s.r, { inSheet: true })}${u && /^.?\s*Undo scoring round/.test(u.label) ? undoCard(g) : ''}`;
 }
 function undoCard(g) {
   const u = lastUndo(g);
@@ -1056,7 +1056,7 @@ function resultForm(g, r, pid) {
   return `
     ${stepper('draft', 'tricks', t('Tricks won'), `${t('Bid')} ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
     ${!keys.length ? '' : open ? keys.map(k => bonusStepper('draft', k, d[k] || 0, true)).join('')
-      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${keys.length === 1 && keys[0] === 'loot' ? t('Add Loot alliances') : t('Add bonuses (14s, Pirates, Mermaids, Skull King)')}</span></button>`}
+      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${keys.length === 1 && keys[0] === 'loot' ? t('Add Loot alliances') : `<span class="link-main">${t('Add bonuses')}</span><small class="link-sub">${t('14s · Pirates · Mermaids · Skull King')}</small>`}</span></button>`}
     ${S.editMarked && g.editing?.[pid] ? `<button class="btn mini bonus-done" data-act="bonus-done">${icon('check', 'sm')}${t('Done, ready to score')}</button>` : ''}
     ${open && keys.length && !made ? `<p class="small muted" style="margin:4px 0 0">${t(g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.')}</p>` : ''}
     <div class="preview"><span class="muted">${t('This round')}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>

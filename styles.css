@@ -1082,7 +1082,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--magenta); o
 /* ---------- critique #8 ---------- */
 /* Trick chips are numbers: "2/3" with a ✓ or ×; no language can wrap them */
 .chip.num { white-space: nowrap; font-variant-numeric: tabular-nums; font-style: italic; font-weight: 750; gap: 3px; }
-.chip.num small { font-size: .86em; font-weight: 650; opacity: .85; }
+.chip.num small { font-size: .75rem; font-weight: 650; opacity: .85; }
 /* Give-a-trick chips look as tappable as they are */
 button.chip.give { min-height: 36px; padding-inline: 10px 8px; }
 .nowrap { white-space: nowrap; }
@@ -1143,3 +1143,8 @@ body.fit main > .card.scored { margin: 8px 0 4px; }
 .counter .btn.plus.drumming:disabled { background: var(--tint); color: var(--ink-2); border-color: transparent; opacity: 1; font-style: italic; }
 /* Table screen: the join code reads from across the room */
 body.table #top .code-chip { font-size: 1.15rem; padding: 6px 14px; }
+/* A link with a second, quieter line (Add bonuses / what counts) */
+.link:has(.link-sub) { text-decoration: none; }
+.link .link-main { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
+.link:hover .link-main { text-decoration-color: currentColor; }
+.link .link-sub { display: block; margin-top: 2px; font-size: .8rem; font-weight: 500; color: var(--ink-3); }
