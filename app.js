@@ -138,7 +138,8 @@ function toast(msg, action) {
 
 // ---------- sound & vibration (WebAudio, unlocked by first tap; one switch per phone) ----------
 let audio, noise;
-document.addEventListener('pointerdown', () => { try { audio ||= new AudioContext(); audio.resume(); } catch {} }, { once: false, passive: true });
+document.addEventListener('pointerdown', () => { try { audio ||= new AudioContext(); audio.resume().catch(() => {}); } catch {} }, { once: false, passive: true });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') audio?.resume().catch(() => {}); });
 S.sound = (() => { try { return localStorage.getItem('sk.sound') !== 'off'; } catch { return true; } })();
 // Phones only allow vibration once someone has tapped the page.
 const buzz = pattern => { if (S.sound && navigator.userActivation?.hasBeenActive !== false) navigator.vibrate?.(pattern); };
@@ -643,7 +644,11 @@ function drawQR() {
   const el = document.getElementById('qr');
   if (!el) return;
   const paint = () => {
-    try { const q = window.qrcode(0, 'M'); q.addData(el.dataset.url || shareURL()); q.make(); el.innerHTML = q.createImgTag(5, 0); }
+    try {
+      const url = el.dataset.url || shareURL();
+      if (el.dataset.drawn === url) return;
+      const q = window.qrcode(0, 'M'); q.addData(url); q.make(); el.innerHTML = q.createImgTag(7, 0); el.dataset.drawn = url;
+    }
     catch { el.hidden = true; }
   };
   if (window.qrcode) return paint();
@@ -751,7 +756,8 @@ const giveTipSeen = () => { try { return localStorage.getItem('sk.giveTip') === 
 const tvMode = () => S.seat === 'watch' && !S.actingFor && innerWidth >= 700;
 // Browsers only play sound after a tap. The table screen gets no taps, so it asks for one.
 function tvSoundBar() {
-  if (!S.sound || audio?.state === 'running' || S.tvSoundOff) return '';
+  let off = false; try { off = localStorage.getItem('sk.tvSound') === 'off'; } catch {}
+  if (!S.sound || audio?.state === 'running' || off) return '';
   return `<div class="tv-sound" role="status"><span>${icon('bell', 'sm')}${t('Tap once so the TV can play the drumroll and chimes')}</span>
     <button class="btn mini" data-act="tv-sound">${t('Turn sound on')}</button><button class="link" data-act="tv-sound-off">${t('No sound')}</button></div>`;
 }
@@ -815,7 +821,7 @@ function biddingView(g) {
     <h2 class="t3">${S.actingFor ? t('How many tricks will {name} win?', { name: esc(name(mine)) }) : t('How many tricks will you win?')} <span class="muted">· ${tn(r, '{n} card', '{n} cards')}</span></h2>
     <p class="muted small" style="margin:0">${r <= 2 ? `${teach} ` : ''}<button class="link inline" data-act="rules">${t('How scoring works')}</button> · <button class="link inline" data-act="cheat">${t('What beats what')}</button></p>
     <div class="bid-grid" role="group" aria-label="${t('Your bid')}" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => { const on = pending ? pending.n === n : bids[mine] === n; return `<button data-act="bid" data-n="${n}" class="${on ? 'on' : ''}" aria-pressed="${on}" aria-label="${tn(n, 'Bid {n} trick', 'Bid {n} tricks')}">${n}</button>`; }).join('')}</div>
-    ${pending ? `<div class="locking" role="status"><span class="locking-bar" style="--hold:${BID_HOLD_MS}ms"></span><span>${t('Locking in {n}…', { n: pending.n })}</span><button class="link" data-act="cancel-bid">${t('Change')}</button></div>` : ''}
+    ${pending ? `<div class="locking" role="status"><span class="locking-bar" style="--hold:${BID_HOLD_MS}ms;--elapsed:-${Date.now() - pending.at}ms"></span><span>${t('Locking in {n}…', { n: pending.n })}</span><button class="link" data-act="cancel-bid">${t('Change')}</button></div>` : ''}
     ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="${t('Rascal wager')}">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}${t('Grapeshot')}</b><span>${t('{n} pts · half if off by 1', { n: 10 * r })}</span></button>
       <button type="button" role="radio" aria-checked="${cannon}" class="${cannon ? 'on' : ''}" data-act="cannon" data-v="1"><b>${icon('cannon', 'sm')}${t('Cannonball')}</b><span>${t('{n} pts · all or nothing', { n: 15 * r })}</span></button>
@@ -1740,8 +1746,8 @@ const actions = {
     document.querySelector('[data-act="toggle-sound"]')?.focus({ preventScroll: true });
   },
   'reload-app'() { location.reload(); },
-  'tv-sound'() { try { audio ||= new AudioContext(); audio.resume().then(() => { chime(); render(); }); } catch {} },
-  'tv-sound-off'() { S.tvSoundOff = true; render(); },
+  'tv-sound'() { try { audio ||= new AudioContext(); audio.resume().then(() => { chime(); render(); }).catch(() => {}); } catch {} },
+  'tv-sound-off'() { try { localStorage.setItem('sk.tvSound', 'off'); } catch {} render(); },
   async install() { const e = installEvent; installEvent = null; if (e) { e.prompt(); await e.userChoice.catch(() => {}); } actions['install-dismiss'](); },
   'install-dismiss'() { try { localStorage.setItem('sk.installTip', 'done'); } catch {} render(); },
   'open-game'(el) { location.hash = el.dataset.code; },
@@ -1813,7 +1819,7 @@ const actions = {
     const g = S.game, r = g.round, who = me();
     if (g.phase !== 'bidding' || !who) return;
     clearTimeout(S.bidTimer);
-    S.pendingBid = { r, who, n: +el.dataset.n };
+    S.pendingBid = { r, who, n: +el.dataset.n, at: Date.now() };
     buzz(15);
     render();
     announce(t('Bid {n}: locking in', { n: +el.dataset.n }));
