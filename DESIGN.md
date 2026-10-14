@@ -504,6 +504,9 @@ When every trick is in, the play screen says "Every trick is in. Moving to resul
 ### Trick Chips
 Every player's trick count during play is a number chip, "2/3" with the bid as the small denominator and a ✓ (bid met) or × (over) before it, so no language can wrap it; the full wording ("2 of 3", "Give Ben a trick") lives in the label for screen readers. Other players' chips are buttons (36px): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.
 
+### Fit the Phone During a Round
+On phones, the bidding and playing screens are the phone's height and never scroll as a page: header, Standings Line (or strip), and the action card hold their places, and the player list below (with Round over and Fix a bid) scrolls inside its own box when the table is big. A partly visible last row signals there is more. With more than five players the bids strip becomes one sideways-scrolling row. Lobby, results, final and crew screens scroll normally.
+
 ### Standings Strip
 During play the Standings Line shrinks to a one-line strip of pills (tile + sounding, leader first with a brass crown, you ringed in magenta), so "I won a trick" sits higher; the full line returns at the reveal and after scoring. Toasts during play drop in from the top, clear of the rows.
 

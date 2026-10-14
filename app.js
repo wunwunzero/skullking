@@ -329,6 +329,8 @@ function focusKey() {
 function render() {
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
+  // Bidding and playing fit the phone: the page doesn't scroll, the player list does (inside its box).
+  document.body.classList.toggle('fit', !!S.game && S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700);
   renderTop();
   if (!S.code && S.setup) { $app.innerHTML = setupView(); }
   else if (!S.code && S.crewCode) { $app.innerHTML = S.crew === undefined ? `<p class="loading">${t('Finding the ship…')}</p>` : S.crew ? crewHomeView(S.crew) : noCrewView(); }
@@ -853,12 +855,12 @@ function biddingView(g) {
   ${banner}
   ${card}
   <div class="section-h"><h2 class="t3">${waiting === 1 && mine && bids[mine] == null ? t('Waiting for you') : waiting ? t('Waiting for {n}', { n: waiting }) : t('Revealing')}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
-  <div class="board" style="--cols:${tableCols(ps.length)}">
+  <div class="fit-scroll"><div class="board" style="--cols:${tableCols(ps.length)}">
     ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${roleBadges(g, r, p.id) ? `<span class="roles">${roleBadges(g, r, p.id)}</span>` : ''}</div>
       ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : nudgeChip(p.id, mine)}
       <span></span></div>`).join('')}${tableFill(ps.length)}
-  </div>`;
+  </div></div>`;
 }
 
 // Table screen: balanced columns for the crew grid, plus filler cells so every rule lines up.
@@ -917,7 +919,7 @@ function playingView(g) {
   const drum = S.drumUntil > Date.now();
   const flip = !drum && S.flipPending;
   if (flip) S.flipPending = false;
-  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''}" style="--bcols:${ps.length <= 5 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
+  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''} ${ps.length > 5 ? 'wide' : ''}" style="--bcols:${ps.length <= 5 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
     ${ps.map((p, i) => drum
       ? `<span class="bid-cell" style="--i:${i}" role="img" aria-label="${esc(p.name)}">${flag(p.id)}<b aria-hidden="true">?</b><small>${esc(p.name)}</small></span>`
       : `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}" role="img" aria-label="${t('{name} bid {n}', { name: esc(p.name), n: bids[p.id] ?? '–' })}${g.cannon?.[r]?.[p.id] ? `, ${t('Cannonball')}` : ''}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name)}</small></span>`).join('')}
@@ -941,11 +943,11 @@ function playingView(g) {
   </div>
   ${!mine && me() && !S.actingFor && (g.players[me()]?.from || 1) > r ? joinsCard(g.players[me()]) : ''}
   ${canDestroy && !watch && !mine && me() === dealerFor(g, r) ? destroyCard(destroyed, done) : ''}
-  <div class="board" style="--cols:${tableCols(ps.length)}">${boardRows(g, r, { showLive: true })}</div>
+  <div class="fit-scroll"><div class="board" style="--cols:${tableCols(ps.length)}">${boardRows(g, r, { showLive: true })}</div>
   ${!watch && !giveTipSeen() ? `<p class="small muted give-tip">${icon('plus', 'sm')}${t('Someone’s phone away? Tap their chip to give them a trick.')}</p>` : ''}
   ${watch ? '' : `${done ? `<p class="small muted stuck" role="status">${t('Every trick is in. Moving to results…')} <button class="link inline" data-act="to-results">${t('Not moving? Tap here')}</button></p>`
-    : `<button class="btn" style="margin-top:16px" data-act="to-results">${t('Round over')}</button>`}
-  <button class="link" data-act="fix-bids">${t('Fix a bid')}</button>`}`;
+    : `<button class="btn" style="margin-top:12px" data-act="to-results">${t('Round over')}</button>`}
+  <button class="link" data-act="fix-bids">${t('Fix a bid')}</button>`}</div>`;
 }
 function destroyCard(destroyed, done) {
   return `<div class="card quiet destroy"><span class="small">${icon('kraken', 'sm')}${t('Destroyed by Kraken / White Whale:')} <b class="sounding">${destroyed}</b></span>

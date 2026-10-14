@@ -1079,3 +1079,33 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--magenta); o
 button.chip.give { min-height: 36px; padding-inline: 10px 8px; }
 .nowrap { white-space: nowrap; }
 :lang(zh) .prow, :lang(zh) .chip { word-break: keep-all; }
+
+/* ---------- fit the phone during a round ---------- */
+/* Bidding and playing: the page is the phone's height; the action card holds its place and the
+   player list scrolls inside its own box when the table is big. Other screens scroll as before. */
+body.fit { height: 100vh; height: 100dvh; overflow: hidden; display: flex; flex-direction: column; }
+body.fit #top { flex: none; }
+body.fit main { flex: 1 1 0; min-height: 0; width: 100%; display: flex; flex-direction: column; padding-top: 6px; padding-bottom: calc(10px + env(safe-area-inset-bottom)); box-sizing: border-box; overflow: hidden; }
+body.fit #sheet, body.fit #toast, body.fit #sr { flex: none; }
+body.fit main > * { flex: none; }
+body.fit main > .section-h { margin: 12px 2px 6px; }
+body.fit main > .fit-scroll { flex: 1 1 0; min-height: 96px; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; margin: 0 calc(-1 * var(--pad)); padding: 0 var(--pad) 4px; }
+/* The pieces that are never the point during play shrink a little so the list keeps room */
+body.fit .card.action, body.fit .play-card { margin: 10px 0; }
+body.fit .play-card .bids-strip { gap: 5px; }
+body.fit .play-card .bid-cell { padding: 6px 3px 4px; gap: 2px; }
+body.fit .play-card .bid-cell b { font-size: 1.45rem; }
+body.fit .play-card .bid-cell .ava { width: 24px; height: 24px; }
+body.fit .play-card .bid-cell small { font-size: .7rem; }
+body.fit .play-card .table-line { margin: 8px 0 0; }
+body.fit .counter { margin-top: 8px; }
+body.fit .counter .btn { min-height: 68px; }
+body.fit .give-tip { margin: 6px 2px 0; }
+body.fit [data-act="to-results"].btn { margin-top: 8px; min-height: 44px; }
+body.fit .link[data-act="fix-bids"] { min-height: 36px; padding-block: 4px; }
+/* Big tables: the bids strip is one compact row that scrolls sideways instead of two tall rows */
+body.fit .play-card .bids-strip.wide { display: flex; overflow-x: auto; scrollbar-width: none; gap: 5px; }
+body.fit .play-card .bids-strip.wide::-webkit-scrollbar { display: none; }
+body.fit .play-card .bids-strip.wide .bid-cell { flex: 0 0 64px; }
+/* The stuck line + Round over fallback are compact too */
+body.fit .stuck { margin: 8px 2px 0; }
