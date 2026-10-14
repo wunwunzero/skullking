@@ -238,6 +238,15 @@ const AWARDS = [
   { id: 'streak', icon: 'streak', title: 'Hot Streak', min: 4, stat: s => s.run, line: s => t('{n} bids in a row', { n: s.run }) },
   { id: 'roller', icon: 'swords', title: 'High Roller', min: 1, stat: s => s.bids, line: s => t('Bid {n} tricks in all', { n: s.bids }) },
   { id: 'wreck', icon: 'down', title: 'Shipwrecked', min: 5, stat: s => s.missed, line: s => t('{n} bids missed', { n: s.missed }) },
+  // More titles, so a big table still gets one each.
+  { id: 'early', icon: 'crown', title: 'Early Leader', min: 1, stat: s => s.ledEarly, line: () => t('Led the table after round 3') },
+  { id: 'late', icon: 'up', title: 'Late Bloomer', min: 60, stat: s => s.late, line: s => t('+{n} in the last three rounds', { n: s.late }) },
+  { id: 'lucky', icon: 'spare', title: 'Lucky 14s', min: 2, stat: s => s.fourteens, line: s => t('{n} fourteens captured', { n: s.fourteens }) },
+  { id: 'magnet', icon: 'target', title: 'Trick Magnet', min: 1, stat: s => s.tricks, line: s => t('{n} tricks won', { n: s.tricks }) },
+  { id: 'bold', icon: 'swords', title: 'Bold Call', min: 3, stat: s => s.boldest, line: s => t('Made a bid of {n}', { n: s.boldest }) },
+  { id: 'unsinkable', icon: 'check', title: 'Unsinkable', min: 1, stat: s => (s.played >= 5 && s.losses === 0 ? 1 : 0), line: () => t('Not one losing round') },
+  { id: 'close', icon: 'equal', title: 'Closest Call', min: 1, stat: s => s.close, line: s => t('{n} behind {name}', { n: s.gap, name: s.above }) },
+  { id: 'ghost', icon: 'bell', title: 'Ghost Ship', min: 1, stat: s => (s.played >= 5 ? 1000 - s.tricks : 0), line: s => tn(s.tricks, 'Only {n} trick all game', 'Only {n} tricks all game') },
 ];
 export function awards(game) {
   const tot = totals(game), ps = sortedPlayers(game), last = scoredRounds(game);
@@ -245,6 +254,7 @@ export function awards(game) {
   for (const p of ps) {
     const rounds = roundsPlayed(game, p.id);
     const s = { made: 0, missed: 0, zeros: 0, bonus: 0, sank: 0, bids: 0, run: 0, climb: 0, played: rounds.length,
+      tricks: 0, fourteens: 0, boldest: 0, losses: 0, late: 0, ledEarly: 0, close: 0, gap: 0, above: '',
       best: { score: -Infinity, round: 0 }, worst: { score: Infinity, round: 0 } };
     let run = 0;
     for (const r of rounds) {
@@ -255,6 +265,11 @@ export function awards(game) {
       if (hit) s.bonus += bonusPoints(res);
       if (hit && res.skullKing) s.sank += res.skullKing;
       s.bids += bid || 0;
+      s.tricks += res.tricks || 0;
+      s.fourteens += (res.std14 || 0) + (res.black14 || 0);
+      if (hit) s.boldest = Math.max(s.boldest, bid);
+      if (sc < 0) s.losses++;
+      if (r > last.length - 3) s.late += sc;
       if (sc > s.best.score) s.best = { score: sc, round: r };
       if (sc < s.worst.score) s.worst = { score: sc, round: r };
     }
@@ -270,6 +285,16 @@ export function awards(game) {
       stats[p.id].climb = Math.max(stats[p.id].climb, place - final[p.id]);
     }
   }
+  // Early leader: sole leader after round 3. Closest call: finished within 20 of the place above.
+  if (last.length > 3) {
+    const v3 = ps.filter(p => playsIn(p, 3)).map(p => [p.id, tot[p.id].running[2]]).sort((a, b) => b[1] - a[1]);
+    if (v3.length > 1 && v3[0][1] > v3[1][1]) stats[v3[0][0]].ledEarly = 1;
+  }
+  const rank = ranking(game);
+  rank.forEach((x, i) => {
+    const gap = i ? rank[i - 1].total - x.total : Infinity;
+    if (gap > 0 && gap <= 20) Object.assign(stats[x.id], { close: 100 - gap, gap, above: rank[i - 1].name });
+  });
   const out = {};
   for (const a of AWARDS) {
     const eligible = ps.filter(p => stats[p.id].played && a.stat(stats[p.id]) >= a.min);

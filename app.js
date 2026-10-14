@@ -764,7 +764,7 @@ function playingView(g) {
   const drum = S.drumUntil > Date.now();
   const flip = !drum && S.flipPending;
   if (flip) S.flipPending = false;
-  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''}" role="group" aria-label="${t('Bids this round')}">
+  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''}" style="--bcols:${ps.length <= 5 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
     ${ps.map((p, i) => drum
       ? `<span class="bid-cell" style="--i:${i}" role="img" aria-label="${esc(p.name)}">${flag(p.id)}<b aria-hidden="true">?</b><small>${esc(p.name.slice(0, 7))}</small></span>`
       : `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}" role="img" aria-label="${t('{name} bid {n}', { name: esc(p.name), n: bids[p.id] ?? '–' })}${g.cannon?.[r]?.[p.id] ? `, ${t('Cannonball')}` : ''}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name.slice(0, 7))}</small></span>`).join('')}
@@ -795,6 +795,9 @@ function destroyCard(destroyed, done) {
     <span><button class="icon-btn outline" data-act="destroy" data-d="-1" ${destroyed <= 0 ? 'disabled' : ''} aria-label="${t('One fewer destroyed trick')}">${icon('minus')}</button>
     <button class="icon-btn outline" data-act="destroy" data-d="1" ${done || destroyed >= 2 ? 'disabled' : ''}>${icon('plus')}${t('Destroyed')}</button></span></div>`;
 }
+
+// Tricks accounted for so far this round: everyone's taps plus any destroyed by Kraken / White Whale.
+const tricksTapped = (g, r) => playersIn(g, r).reduce((s, p) => s + (g.live?.[r]?.[p.id] || 0), 0) + (g.destroyed?.[r] || 0);
 
 // ---------- results ----------
 function draftFor(g, r, pid) {
@@ -1006,7 +1009,7 @@ function scoresSheet() {
     }).join('')}</tr>`;
   }
   return `<p class="small muted" style="margin-top:0">${t(S.readOnlyTable ? 'Cells show score and bid/won.' : 'Cells show score and bid/won. Tap a scored round to fix it.')}</p>
-  <div class="tbl-wrap"><table class="scores"><thead><tr><th>#</th>${ps.map(p => `<th>${flag(p.id)}${esc(p.name)}</th>`).join('')}</tr></thead>
+  <div class="tbl-wrap"><table class="scores ${ps.length > 5 ? 'many' : ''}"><thead><tr><th>#</th>${ps.map(p => `<th>${flag(p.id)}${esc(p.name)}</th>`).join('')}</tr></thead>
   <tbody>${rows}</tbody><tfoot><tr><td></td>${ps.map(p => `<td>${plain(tot[p.id].total)}</td>`).join('')}</tr></tfoot></table></div>`;
 }
 
@@ -1579,8 +1582,10 @@ const actions = {
   },
   'edit-cannon'(el) { S.sheet.cannon = el.dataset.v === '1'; renderSheet(); },
   destroy(el) {
-    const g = S.game, r = g.round, cur = g.destroyed?.[r] || 0;
-    update({ [`destroyed/${r}`]: Math.max(0, Math.min(2, cur + +el.dataset.d)) || null });
+    const g = S.game, r = g.round, cur = g.destroyed?.[r] || 0, next = Math.max(0, Math.min(2, cur + +el.dataset.d));
+    const patch = { [`destroyed/${r}`]: next || null };
+    if (g.phase === 'playing' && next > cur && tricksTapped(g, r) + (next - cur) >= r) withHistory(g, Object.assign(patch, { phase: 'results' }), '← Back to playing');
+    update(patch);
   },
   'open-actfor'() { S.sheet = { kind: 'actfor' }; renderSheet(); },
   'act-as'(el) { S.actingFor = el.dataset.id; S.sheet = null; render(); window.scrollTo(0, 0); },
@@ -1612,7 +1617,10 @@ const actions = {
   live(el) {
     const g = S.game, r = g.round, who = me();
     const cur = g.live?.[r]?.[who] || 0, next = Math.max(0, Math.min(r, cur + +el.dataset.d));
-    update({ [`live/${r}/${who}`]: next });
+    const patch = { [`live/${r}/${who}`]: next };
+    // The last trick of the round takes every phone straight to results (Back to playing undoes it).
+    if (g.phase === 'playing' && next > cur && tricksTapped(g, r) + (next - cur) >= r) withHistory(g, Object.assign(patch, { phase: 'results' }), '← Back to playing');
+    update(patch);
     buzz(15);
   },
   'to-results'() {

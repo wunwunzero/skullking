@@ -51,7 +51,7 @@ export function leaderboard(crew, season = null) {
 }
 
 // Teasing awards belong to the night they happened, not to someone's crew profile.
-const TEASING = new Set(['kraken', 'wreck']);
+const TEASING = new Set(['kraken', 'wreck', 'ghost']);
 
 // Everything about one member across all games.
 export function playerStats(crew, member) {

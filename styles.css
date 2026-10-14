@@ -805,3 +805,16 @@ body.table .standings { --lane-h: 50px; --lane-n: 50; }
 p, .note { text-wrap: pretty; }
 /* Sheet titles take focus so screen readers start there; they aren't controls, so no ring. */
 .sheet h2[tabindex="-1"]:focus { outline: none; }
+
+/* ---------- 7-player playtest ---------- */
+/* Bids strip: balanced rows (8 → 4 + 4, 7 → 4 + 3) */
+.bids-strip { grid-template-columns: repeat(var(--bcols, 4), minmax(0, 1fr)); }
+/* Scores table: up to 8 players fit the phone width; names truncate, cells tighten */
+.scores.many { table-layout: fixed; width: 100%; }
+.scores.many th, .scores.many td { padding: 4px 1px; }
+.scores.many th:first-child, .scores.many td.rn { width: 20px; }
+.scores.many th { font-size: .7rem; max-width: none; overflow: hidden; text-overflow: ellipsis; }
+.scores.many th .ava { width: 20px; height: 20px; }
+.scores.many td button, .scores.many .ro { min-width: 0; width: 100%; padding: 4px 0; font-size: .82rem; }
+.scores.many td small { font-size: .68rem; }
+.scores.many tfoot td { font-size: .86rem; }
