@@ -90,6 +90,14 @@ export function playerStats(crew, member) {
   };
 }
 
+// One member's games, oldest first: { code, at, total, place, of }.
+export function memberGames(crew, member) {
+  return crewGames(crew).reverse().map(g => {
+    const rows = gameRows(g), me = rows.find(x => x.member === member);
+    return me ? { code: g.code, at: g.at, total: me.total, place: me.place, of: rows.length } : null;
+  }).filter(Boolean);
+}
+
 // Crew records, all time. Each: { member, value, code, at, round? }.
 export function records(crew) {
   const games = crewGames(crew), out = {};

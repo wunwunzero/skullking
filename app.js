@@ -6,7 +6,7 @@ import {
   playersIn, playsIn, awards,
 } from './scoring.js';
 import { t, tn, ordinal, LANGS, getLang, setLang } from './i18n.js';
-import { crewGames, gameRows, champion as crewChampion, leaderboard, playerStats, records, pastSeasons, usualSeating } from './crew.js';
+import { crewGames, gameRows, champion as crewChampion, leaderboard, playerStats, records, pastSeasons, usualSeating, memberGames } from './crew.js';
 
 // Player identity = colour + signal-flag pattern, so it never depends on colour alone.
 const COLORS = ['#1a9bb0', '#e5603e', '#2e9e63', '#6a5acd', '#d99a1e', '#3b82c4', '#a0663a', '#6b7a8c'];
@@ -442,8 +442,25 @@ function homeView() {
   </div>
   ${myCrews().length ? `<button class="link" data-act="new-crew">${icon('users', 'sm')}<span>${t('Start another crew')}</span></button>` : `<button class="btn" data-act="new-crew">${icon('users')} ${t('Start a crew to keep score over time')}</button>`}
   <button class="btn ghost" data-act="rules">${icon('book')} ${t('How scoring works')}</button>
+  ${installTip()}
   ${langPicker()}
   ${S.store.live ? '' : `<p class="note">${t('Local mode: games sync between tabs on this device only.')}</p>`}`;
+}
+
+// A one-time tip to put the app on the home screen, so it opens full-screen with no browser bar.
+let installEvent = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; if (!S.code) render(); });
+function installTip() {
+  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  let seen = false; try { seen = localStorage.getItem('sk.installTip') === 'done'; } catch {}
+  if (standalone || seen || !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) return '';
+  const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  return `<div class="card install-tip">${icon('phone')}<div><b>${t('Keep it on your home screen')}</b>
+    <span>${installEvent ? t('It opens full-screen, like an app, and works with weak signal.')
+      : ios ? t('In Safari tap Share, then “Add to Home Screen”. It opens full-screen, like an app.')
+      : t('In your browser menu, choose “Add to Home screen”. It opens full-screen, like an app.')}</span>
+    ${installEvent ? `<button class="btn mini" data-act="install">${t('Add to home screen')}</button>` : ''}</div>
+    <button class="icon-btn" data-act="install-dismiss" aria-label="${t('Dismiss')}">${icon('close')}</button></div>`;
 }
 
 // Each phone picks its own language.
@@ -715,16 +732,21 @@ function tvView(g) {
   const head = g.phase === 'bidding' ? (waiting.length ? t('Waiting for {names}', { names: waiting.map(p => esc(p.name)).join(', ') }) : t('Revealing'))
     : g.phase === 'playing' ? `${t('Tricks played')} <b class="sounding">${played}</b> / ${r} · ${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}`
     : t('{n} of {m} locked in', { n: ps.filter(p => eff[p.id]?.src === 'confirmed').length, m: ps.length });
-  const hint = revealed ? bidHint(g, r) : null;
+  // The reveal, big: bids sit face down through the drumroll, then flip row by row.
+  const drum = g.phase === 'playing' && S.drumUntil > Date.now();
+  const flip = g.phase === 'playing' && !drum && S.flipPending;
+  if (flip) S.flipPending = false;
+  const hint = revealed && !drum ? bidHint(g, r) : null;
   return `${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
+  ${standingsLine(g, { full: true })}
   <div class="tv-head"><p>${head}</p>${hint ? `<p class="verdict">${icon(hint.icon, 'sm')}<span>${esc(hint.text)}</span></p>` : ''}</div>
-  <table class="tv-grid"><thead><tr><th>${t('Players')}</th><th>${t('Bid')}</th><th>${t(g.phase === 'results' ? 'won' : 'Tricks')}</th><th>${t('This round')}</th><th>${t('Total')}</th></tr></thead><tbody>
-  ${ps.map(p => {
+  <table class="tv-grid ${drum ? 'drum' : flip ? 'flip' : ''}"><thead><tr><th>${t('Players')}</th><th>${t('Bid')}</th><th>${t(g.phase === 'results' ? 'won' : 'Tricks')}</th><th>${t('This round')}</th><th>${t('Total')}</th></tr></thead><tbody>
+  ${ps.map((p, i) => {
     const bid = bids[p.id], got = g.phase === 'results' ? eff[p.id]?.tricks : live[p.id] || 0, st = liveStatus(bid, got ?? 0);
     const sc = g.phase === 'results' && eff[p.id] ? scoreFor(g, r, p.id, eff[p.id]) : null;
     const lead = scored && tot[p.id].total === top && top > 0;
     return `<tr style="--crew:${color(p.id)}"><td><span class="tv-who">${flag(p.id)}<b>${esc(p.name)}</b>${roleBadges(g, r, p.id)}</span></td>
-      <td class="num">${!revealed ? (bid != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : '<span class="muted">…</span>') : bid ?? '–'}</td>
+      <td class="num">${!revealed ? (bid != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : '<span class="muted">…</span>') : `<span class="bidv" style="--i:${i}">${drum ? '?' : bid ?? '–'}</span>`}</td>
       <td class="num ${revealed && bid != null ? ({ on: 'good-t', bust: 'bad-t', bust0: 'bad-t' }[st] || '') : ''}">${revealed ? (got ?? '–') : ''}</td>
       <td class="num">${sc == null ? '' : `<span class="${sc >= 0 ? 'good-t' : 'bad-t'}">${signed(sc)}</span>`}</td>
       <td class="num total">${lead ? icon('crown', 'crown') : ''}${plain(tot[p.id].total + (sc || 0))}</td></tr>`;
@@ -793,15 +815,18 @@ function joinsCard(p) {
 // ---------- playing ----------
 function boardRows(g, r, { showLive }) {
   const bids = g.bids?.[r] || {}, live = g.live?.[r] || {}, tot = totals(g), mine = me();
+  // Anyone can log a trick for another player by tapping their chip (for a phone that's away).
+  const canGive = showLive && g.phase === 'playing' && !(S.seat === 'watch' && !S.actingFor) && tricksTapped(g, r) < r;
   return playersIn(g, r).map((p, i) => {
     const bid = bids[p.id], got = live[p.id] || 0, st = liveStatus(bid, got);
-    const chip = !showLive ? '' : {
+    let chip = !showLive ? '' : {
       need: `<span class="chip">${t('{n} of {m}', { n: got, m: bid })}</span>`,
       on: `<span class="chip good">${icon('check')}${t('{n} of {m}', { n: got, m: bid })}</span>`,
       bust: `<span class="chip bad">${icon('x')}${t('{n} won · bid {m}', { n: got, m: bid })}</span>`,
       safe0: `<span class="chip sk">${t('Zero bid · none won')}</span>`,
       bust0: `<span class="chip bad">${icon('x')}${t('Zero · {n} won', { n: got })}</span>`, none: '',
     }[st];
+    if (canGive && p.id !== mine && chip) chip = chip.replace(/^<span class="chip/, `<button type="button" data-act="trick-for" data-id="${p.id}" aria-label="${t('Give {name} a trick', { name: esc(p.name) })}" class="chip give`).replace(/<\/span>$/, `${icon('plus', 'sm give-plus')}</button>`);
     return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${roleBadges(g, r, p.id)}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></div>
       ${chip}<span class="total">${plain(tot[p.id].total)}</span></div>`;
@@ -1220,19 +1245,18 @@ function crewHomeView(c) {
     <button class="code-chip" data-act="crew-share" aria-label="${t('Invite to the crew')}">${icon('share', 'sm')}${esc(S.crewCode)}</button></div>
   <section class="crew-hero"><h1>${esc(c.name)}</h1>
     <p>${tn(games.length, '{n} game played', '{n} games played')} · ${t('Season {n}', { n: season })}</p></section>
+  ${seasonChart(c, season)}
   ${champ && c.members?.[champ] ? `<div class="card scored nailed champ"><div class="outcome">${avatarTile('skullking')}<div class="what">${t('{name} won the last game', { name: esc(mname(champ)) })}
     <small>${t('They sail as the Skull King next game.')}</small></div></div></div>` : ''}
   ${live ? `<button class="btn" data-act="open-game" data-code="${live}">${icon('lead')} ${t('Back to game {code}', { code: live })}</button>` : ''}
   <button class="btn primary" data-act="crew-new">${icon('plus')} ${t('New game')}</button>
-
-  ${seasonChart(c, season)}
 
   <div class="section-h"><h2 class="t3">${t('Leaderboard')}</h2></div>
   <div class="seg crew-seg" role="radiogroup" aria-label="${t('Leaderboard')}">
     <button type="button" role="radio" aria-checked="${tab === 'season'}" class="${tab === 'season' ? 'on' : ''}" data-act="crew-tab" data-v="season"><b>${t('Season {n}', { n: season })}</b></button>
     <button type="button" role="radio" aria-checked="${tab === 'all'}" class="${tab === 'all' ? 'on' : ''}" data-act="crew-tab" data-v="all"><b>${t('All time')}</b></button>
   </div>
-  ${board.length ? `<div class="board podium crew-board">${board.map(x => `<button class="prow" data-act="member" data-m="${x.member}" style="--crew:${CREW[c.members?.[x.member]?.avatar]?.color || 'transparent'}">
+  ${board.length ? `${crewLine(c, board)}<div class="board podium crew-board">${board.map(x => `<button class="prow" data-act="member" data-m="${x.member}" style="--crew:${CREW[c.members?.[x.member]?.avatar]?.color || 'transparent'}">
       <span class="place">${x.place}</span>${memberTile(c.members?.[x.member])}
       <div class="who"><b><span class="nm">${esc(x.name)}</span>${x.place === 1 ? icon('crown', 'sm') : ''}</b><span>${tn(x.games, '{n} game', '{n} games')} · ${t('avg {n}', { n: plain(x.avg) })}</span></div>
       <span class="total">${tn(x.wins, '{n} win', '{n} wins')}</span></button>`).join('')}</div>
@@ -1267,6 +1291,51 @@ function crewHomeView(c) {
     <button class="btn ghost" data-act="new-season">${icon('streak')} ${t('Start a new season')}</button>
     <button class="btn ghost" data-act="forget-crew">${icon('exit')} ${t('Remove this crew from this phone')}</button>
   </div>`;
+}
+
+// The leaderboard as a Standings Line: wins along the chart, tied sailors share a marker.
+function crewLine(c, board) {
+  const hi = Math.max(2, ...board.map(x => x.wins) ) + 1, pos = v => (v / hi) * 100;
+  const groups = [];
+  for (const x of [...board].sort((a, b) => a.wins - b.wins)) {
+    const last = groups[groups.length - 1];
+    if (last && last.v === x.wins) last.xs.push(x); else groups.push({ v: x.wins, xs: [x] });
+  }
+  const top = Math.max(...board.map(x => x.wins)), ends = [];
+  const markers = groups.map(gr => {
+    const x = pos(gr.v), solo = gr.xs.length === 1, w = 30 + (gr.xs.length - 1) * 4;
+    let lane = ends.findIndex(e => x - e >= w); if (lane < 0) { lane = ends.length; ends.push(x); } else ends[lane] = x;
+    const faces = solo ? memberTile(c.members?.[gr.xs[0].member]) : `<span class="faces">${gr.xs.map(m => memberTile(c.members?.[m.member])).join('')}</span>`;
+    const edge = x < 12 ? 'edge-l' : x > 88 ? 'edge-r' : '';
+    return `<div class="marker ${gr.v === top && top > 0 ? 'lead' : ''} ${edge}" data-id="crew-${gr.xs[0].member}" style="--x:${x.toFixed(2)}%;--lane:${lane}">
+      <span class="stem"></span><span class="tag">${gr.v === top && top > 0 ? icon('crown', 'crown') : ''}${faces}${solo ? `<span class="nm-cut">${esc(gr.xs[0].name)}</span> ` : ''}<b>${gr.v}</b></span></div>`;
+  }).join('');
+  let ticks = '';
+  for (let v = 0; v <= hi; v++) ticks += `<span class="tick ${v === 0 ? 'zero' : ''}" style="left:${pos(v)}%">${v}</span>`;
+  const bands = [1, 2, 3].map(i => `<span class="band b${i}" style="left:${((i - 1) / 3) * 100}%" aria-hidden="true"></span>`).join('')
+    + `<span class="water-label shoal" aria-hidden="true">${t('shallows')}</span><span class="water-label deep" aria-hidden="true">${t('deep water')}</span>`;
+  return `<div class="standings crew-line" role="img" aria-label="${t('Wins')}: ${esc(board.map(x => `${x.name} ${x.wins}`).join(', '))}">
+    <div class="lanes" style="--lanes:${Math.max(1, ends.length)}">${bands}${markers}</div><div class="scale">${ticks}</div></div>`;
+}
+
+// One sailor's record: their score in every game, wins in brass, best and worst marked.
+function recordChart(c, m) {
+  const gs = memberGames(c, m);
+  if (gs.length < 2) return '';
+  const W = 340, H = 150, L = 34, R = 14, T = 16, B = 22;
+  const vals = gs.map(g => g.total), lo = Math.min(0, ...vals), hi = Math.max(10, ...vals);
+  const x = i => L + (i / (gs.length - 1)) * (W - L - R), y = v => T + (1 - (v - lo) / (hi - lo || 1)) * (H - T - B);
+  const best = vals.indexOf(Math.max(...vals)), worst = vals.indexOf(Math.min(...vals));
+  const step = Math.max(50, Math.ceil((hi - lo) / 3 / 50) * 50);
+  let grid = '';
+  for (let v = Math.ceil(lo / step) * step; v <= hi; v += step) grid += `<line class="${v === 0 ? 'zero' : 'grid'}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${plain(v)}</text>`;
+  const col = CREW[c.members?.[m]?.avatar]?.color || 'var(--ink-2)';
+  const dots = gs.map((g, i) => `<circle cx="${x(i)}" cy="${y(g.total)}" r="${g.place === 1 ? 5 : 3.2}" class="${g.place === 1 ? 'win' : 'pt'}"/>`).join('');
+  const label = (i, txt, cls) => `<text x="${Math.min(W - R, Math.max(L, x(i)))}" y="${y(vals[i]) + (cls === 'worst' ? 16 : -9)}" text-anchor="middle" class="mark-${cls}">${txt}</text>`;
+  return `<div class="card record"><div class="section-h" style="margin:0 0 4px"><h3 class="t3">${t('Every game')}</h3><span>${t('brass = a win')}</span></div>
+    <svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="${t('Scores game by game')}: ${gs.map(g => plain(g.total)).join(', ')}">${grid}
+    <polyline points="${gs.map((g, i) => `${x(i).toFixed(1)},${y(g.total).toFixed(1)}`).join(' ')}" fill="none" stroke="${col}" stroke-width="2.25" stroke-linejoin="round"/>${dots}
+    ${label(best, plain(vals[best]), 'best')}${worst !== best ? label(worst, plain(vals[worst]), 'worst') : ''}</svg></div>`;
 }
 
 // The season as a voyage chart: each game a sounding along the bottom, each sailor a line of
@@ -1319,14 +1388,17 @@ function memberSheet(s) {
   const cell = (label, value, sub = '') => `<div class="stat"><span>${t(label)}</span><b>${value}</b>${sub ? `<small>${sub}</small>` : ''}</div>`;
   return `<div class="member-head">${memberTile(x, 'big')}<div><b>${esc(x.name)}</b><small>${t('All games with {crew}', { crew: esc(c.name) })}</small>
     ${st.title ? `<span>${icon(st.title.icon, 'sm')}${t(st.games > 1 ? 'Usually: {title}' : 'Title: {title}', { title: esc(st.title.title) })}</span>` : ''}</div></div>
-  ${st.games ? `<div class="stats">
-    ${cell('Games', st.games)}${cell('Wins', st.wins, pct(st.rate))}
-    ${cell('Average score', plain(st.avg))}${cell('Bid accuracy', pct(st.accuracy), t('{n} of {m} rounds', { n: st.made, m: st.rounds }))}
-    ${cell('Best game', st.bestGame ? plain(st.bestGame.total) : '–', st.bestGame ? fmtDate(st.bestGame.at) : '')}
-    ${cell('Best round', st.bestRound ? signed(st.bestRound.score) : '–', st.bestRound ? `${t('Round {r}', { r: st.bestRound.round })} · ${fmtDate(st.bestRound.at)}` : '')}
-    ${cell('Zero bids nailed', st.zeros)}
-    ${cell('Favourite character', st.favourite ? `<span class="fav">${avatarTile(st.favourite)}${esc(t(CREW[st.favourite].name))}</span>` : '–')}
+  ${st.games ? `<div class="soundings">
+    ${cell('Games', st.games)}${cell('Wins', st.wins, pct(st.rate))}${cell('Average score', plain(st.avg))}${cell('Bid accuracy', pct(st.accuracy))}
   </div>
+  ${recordChart(c, s.m)}
+  <ul class="log">
+    ${st.bestGame ? `<li><span>${t('Best game')}</span><b>${plain(st.bestGame.total)}</b><small>${fmtDate(st.bestGame.at)}</small></li>` : ''}
+    ${st.bestRound ? `<li><span>${t('Best round')}</span><b>${signed(st.bestRound.score)}</b><small>${t('Round {r}', { r: st.bestRound.round })} · ${fmtDate(st.bestRound.at)}</small></li>` : ''}
+    <li><span>${t('Bids made')}</span><b>${st.made}</b><small>${t('{n} of {m} rounds', { n: st.made, m: st.rounds })}</small></li>
+    <li><span>${t('Zero bids nailed')}</span><b>${st.zeros}</b><small></small></li>
+    ${st.favourite ? `<li><span>${t('Favourite character')}</span><b class="fav">${avatarTile(st.favourite)}${esc(t(CREW[st.favourite].name))}</b><small></small></li>` : ''}
+  </ul>
   ${st.rivals.length ? `<div class="section-h"><h3 class="t3">${t('Head to head')}</h3><span>${t('ahead – behind')}</span></div>
     <div class="board rivals">${st.rivals.map(v => `<div class="prow">${memberTile(c.members?.[v.member])}
       <div class="who"><b><span class="nm">${t('vs {name}', { name: esc(mname(v.member)) })}</span></b><span>${tn(v.together, '{n} game together', '{n} games together')}</span></div>
@@ -1608,6 +1680,8 @@ const actions = {
     document.querySelector('[data-act="toggle-sound"]')?.focus({ preventScroll: true });
   },
   'reload-app'() { location.reload(); },
+  async install() { const e = installEvent; installEvent = null; if (e) { e.prompt(); await e.userChoice.catch(() => {}); } actions['install-dismiss'](); },
+  'install-dismiss'() { try { localStorage.setItem('sk.installTip', 'done'); } catch {} render(); },
   'open-game'(el) { location.hash = el.dataset.code; },
   scores() { S.sheet = { kind: 'scores' }; renderSheet(); },
   menu() { S.sheet = { kind: 'menu' }; renderSheet(); },
@@ -1688,6 +1762,16 @@ const actions = {
   'to-results'() {
     const g = S.game;
     update(withHistory(g, { phase: 'results' }, '← Back to playing'));
+  },
+  'trick-for'(el) {
+    const g = S.game, r = g.round, pid = el.dataset.id, cur = g.live?.[r]?.[pid] || 0;
+    if (g.phase !== 'playing' || tricksTapped(g, r) >= r) return;
+    update({ [`live/${r}/${pid}`]: cur + 1 });
+    buzz(15);
+    toast(t('Trick for {name}', { name: name(pid) }), { label: t('Undo'), run: () => {
+      const now = S.game.live?.[r]?.[pid] || 0;
+      if (S.game.round === r && now > 0) update({ [`live/${r}/${pid}`]: now - 1, ...(S.game.phase === 'results' ? { phase: 'playing' } : {}) });
+    } });
   },
   'fix-bids'() { S.sheet = { kind: 'bidpick' }; renderSheet(); },
   'open-bonus'() { S.bonusOpen[`${S.game.round}:${me()}`] = true; render(); },

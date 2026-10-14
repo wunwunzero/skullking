@@ -853,3 +853,55 @@ body.table .tv-head .verdict { font-size: 1.2rem; color: var(--ink); }
 .tv-grid td.num .chip { font-size: 1rem; font-style: normal; }
 .tv-grid td.total { color: var(--ink); }
 .tv-grid td.total .crown { width: 22px; height: 22px; color: var(--brass); margin-right: 6px; vertical-align: 2px; }
+
+/* Tap another player's chip to log a trick for them */
+button.chip.give { position: relative; cursor: pointer; gap: 5px; }
+button.chip.give::after { content: ''; position: absolute; inset: -6px -4px; }
+button.chip.give .give-plus { width: 14px; height: 14px; opacity: .7; }
+button.chip.give:active { transform: scale(.96); }
+
+.card.install-tip { display: grid; grid-template-columns: 22px 1fr auto; gap: 12px; align-items: start; }
+.card.install-tip .ico { color: var(--ink-2); margin-top: 2px; }
+.card.install-tip b { display: block; }
+.card.install-tip span { display: block; font-size: .875rem; color: var(--ink-2); margin-top: 2px; }
+.card.install-tip .btn.mini { margin-top: 10px; }
+.card.install-tip .icon-btn { margin: -10px -10px 0 0; }
+
+/* TV: the Standings Line across the top, and the reveal row by row */
+body.table .standings { margin-top: 8px; }
+.tv-grid .bidv { display: inline-block; min-width: 1ch; }
+.tv-grid.drum .bidv { color: var(--ink-3); animation: shiver .12s linear infinite alternate; animation-delay: calc(var(--i) * -40ms); }
+.tv-grid.flip .bidv { animation: flip .7s var(--ease) both; animation-delay: calc(var(--i) * 110ms); transform-origin: 50% 100%; }
+
+/* Crew logbook: the voyage chart leads; the leaderboard is a Standings Line of wins */
+.crew-hero + .card.voyage { margin-top: 4px; }
+.card.voyage .chart { min-height: 170px; }
+.standings.crew-line { margin: 4px 0 12px; }
+.crew-line .marker .tag .ava { width: 20px; height: 20px; border-radius: 5px; }
+/* Player record: a strip of soundings, the game-by-game chart, then a short log */
+.soundings { display: grid; grid-template-columns: repeat(4, 1fr); border-top: var(--hair) solid var(--line); border-bottom: var(--hair) solid var(--line); margin: 4px 0 12px; }
+.soundings .stat { background: transparent; padding: 10px 4px; border-left: var(--hair) solid var(--line); }
+.soundings .stat:first-child { border-left: 0; }
+.soundings .stat > b { font-size: 1.35rem; }
+.soundings .stat > span { font-size: .75rem; }
+.card.record { padding: 12px 12px 6px; }
+.chart .win { fill: var(--brass-fill); stroke: var(--surface); stroke-width: 1.5; }
+.chart .pt { fill: var(--ink-2); }
+.chart .mark-best { fill: var(--brass); font-weight: 800; font-style: italic; font-size: 12px; }
+.chart .mark-worst { fill: var(--bad); font-weight: 800; font-style: italic; font-size: 12px; }
+ul.log { list-style: none; margin: 4px 0 0; padding: 0; }
+ul.log li { display: grid; grid-template-columns: 1fr auto; column-gap: 12px; padding: 9px 2px; border-top: var(--hair) solid var(--line); }
+ul.log li:first-child { border-top: 0; }
+ul.log li > span { color: var(--ink-2); font-size: .9rem; }
+ul.log li > b { text-align: right; font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
+ul.log li > b.fav { display: flex; align-items: center; gap: 6px; font-style: normal; font-weight: 700; }
+ul.log li > b.fav .ava { width: 22px; height: 22px; border-radius: 6px; }
+ul.log li > small { grid-column: 1 / -1; color: var(--ink-3); font-size: .78rem; }
+ul.log li > small:empty { display: none; }
+.crew-line .marker .tag .faces > * + * { margin-left: -5px; }
+/* TV: keep 8 players plus the Standings Line inside a 1280×800 screen */
+.tv-grid td { padding: 6px 18px; }
+.tv-grid .tv-who .ava { width: 38px; height: 38px; }
+.tv-grid .tv-who b { font-size: 1.45rem; }
+.tv-grid td.num { font-size: 1.9rem; }
+body.table .tv-head { margin: 10px 0 8px; font-size: 1.2rem; }
