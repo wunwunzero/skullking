@@ -483,6 +483,15 @@ Each player locks in their own round (tricks plus any bonuses) with the magenta 
 ### Crew Logbook and Player Record
 The crew page leads with the season voyage chart (wins after each game, step lines) right under the crew name, then the last-winner card and New game. The leaderboard opens with a Standings Line of wins (same bands, ticks and markers as the game; tied sailors share a marker) above the tappable rows. A player's sheet is a record, not a tile grid: a strip of four soundings (games, wins, average, bid accuracy) between hairlines, a game-by-game score line in their character colour with wins as brass dots and the best/worst labelled, then a short log (best game, best round, bids made, zero bids, favourite character) and head to head.
 
+### Bid Lock-in
+Tapping a bid key selects it and shows a 4px bar filling in magenta over 2s with "Locking in N…" and a Change link; only then does the bid count (and, for the last bidder, set off the reveal). A mis-tap on a phone lying flat can be changed before anyone sees it.
+
+### You, In Words
+Your row carries a small uppercase "you" pill in magenta outline beside your name (and screen readers hear "(you)" in the Standings Line), so "you" never rests on colour alone. Role badges (dealer, leads tricks) sit on the row's second line so the name never gives up its width.
+
+### Finale
+The final screen is centred: the crowned winner's 104px tile rises, the name follows at display size, and the winning total lands big in brass italic (count-up), then your personal line, the Standings Line, podium, rematch and awards.
+
 ### Giving a Trick
 During play, another player's status chip is a button ("Give Ben a trick", with a small plus): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.
 

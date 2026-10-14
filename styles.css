@@ -701,7 +701,6 @@ select:focus { border-color: var(--magenta); outline: none; }
 /* Header: three tools on the right, so keep them snug and let long round labels drop the "/ 10". */
 #top { gap: 4px; }
 #top .icon-btn { min-width: 40px; padding: 0 8px; }
-@media (max-width: 400px) { :lang(ms) #top .round b span { display: none; } }
 
 /* ---------- crews: shared history ---------- */
 .crew-link { display: grid; grid-template-columns: 22px 1fr 20px; align-items: center; gap: 12px; width: 100%; text-align: left; margin-bottom: 12px;
@@ -905,3 +904,50 @@ ul.log li > small:empty { display: none; }
 .tv-grid .tv-who b { font-size: 1.45rem; }
 .tv-grid td.num { font-size: 1.9rem; }
 body.table .tv-head { margin: 10px 0 8px; font-size: 1.2rem; }
+
+/* ---------- critique #6 ---------- */
+/* Rows: the name never gives way; roles ride on the second line; "you" in words, not just colour */
+.prow .who > b .nm { flex: 0 1 auto; min-width: 3.2em; }
+.prow .who > .roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .875rem; color: var(--ink-2); margin-top: 2px; }
+.prow .who > .roles .badge { font-size: .72rem; }
+.you-tag { flex: none; font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--magenta); border: var(--hair) solid currentColor; border-radius: 999px; padding: 0 6px; line-height: 1.5; }
+.src { white-space: nowrap; }
+/* Toasts float above the bottom dock */
+.toast { bottom: calc(20px + var(--dock-h, 0px) + env(safe-area-inset-bottom)); }
+/* Bid lock-in: a 2s bar with Change */
+.locking { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 4px 12px; margin-top: 12px; font-weight: 650; }
+.locking-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: var(--tint-2); overflow: hidden; position: relative; }
+.locking-bar::after { content: ''; position: absolute; inset: 0; background: var(--magenta); transform-origin: left; animation: hold var(--hold) linear both; }
+@keyframes hold { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.locking .link { min-height: 44px; }
+/* Results: what "Locked in" means */
+.locked-note { flex-wrap: wrap; }
+.locked-note span { flex-basis: 100%; font-weight: 500; font-size: .85rem; color: var(--ink-2); }
+/* Give-a-trick: full 44px hit area, and a one-time tip */
+button.chip.give::after { inset: -7px -4px; }
+.give-tip { display: flex; align-items: center; gap: 6px; margin: 10px 2px 0; }
+/* Crew rows and setup */
+.crew-board .prow { grid-template-columns: 26px 34px 1fr auto 16px; }
+.crew-board .chev { color: var(--ink-3); }
+.back-link { margin: 4px 0 2px; }
+/* TV: marks next to tricks, a big round header, rows that fill the screen */
+.tv-grid .tv-mark { width: 26px; height: 26px; margin-right: 8px; vertical-align: -2px; stroke-width: 2.6; }
+body.table #top .round b { font-size: 1.8rem; }
+body.table #top .round small { font-size: 1.05rem; }
+body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 360px) / var(--rows, 8))); }
+/* Finale: centred; the crowned winner rises; the total lands big in brass */
+.winner.finale { text-align: center; padding-top: 7vh; }
+.winner.finale .hero-flags { justify-content: center; }
+.winner.finale .hero-flag .ava { width: 104px; height: 104px; border-radius: 22px; }
+.winner.finale h1 { font-size: clamp(2.6rem, 12vw, 3.6rem); }
+.winner.finale .final-total { display: grid; justify-items: center; gap: 2px; margin-top: 10px; }
+.winner.finale .final-total b { font-size: clamp(3rem, 16vw, 4.4rem); line-height: 1; color: var(--brass); font-style: italic; font-weight: 800; font-variant-numeric: tabular-nums; }
+.winner.finale.arrive h1 { animation: raise .9s var(--ease) .35s both; }
+.winner.finale.arrive .final-total { animation: raise .9s var(--ease) .6s both; }
+/* Narrow phones: keep "Round 4 / 10" whole in every language */
+@media (max-width: 380px) {
+  #top { gap: 3px; }
+  #top .icon-btn { min-width: 40px; padding: 0 4px; }
+  .code-chip { letter-spacing: .08em; padding: 0 9px 0 8px; gap: 5px; }
+  #top .round b { font-size: .98rem; }
+}
