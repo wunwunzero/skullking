@@ -303,6 +303,21 @@ export function awards(game) {
     const who = eligible.find(p => a.stat(stats[p.id]) === top && !out[p.id]);
     if (who) out[who.id] = { award: a.id, icon: a.icon, title: t(a.title), line: a.line(stats[who.id]) };
   }
+  // Second pass: anyone still without a title gets the unused one they're strongest at
+  // (relative to the best at it), as long as they clear its bar. The stat line stays true.
+  const used = new Set(Object.values(out).map(a => a.award));
+  for (const p of rank.map(x => ps.find(q => q.id === x.id))) {
+    if (out[p.id] || !stats[p.id].played) continue;
+    let best = null;
+    for (const a of AWARDS) {
+      if (used.has(a.id) || ['ghost', 'kraken', 'wreck', 'early', 'close', 'unsinkable'].includes(a.id)) continue;
+      const v = a.stat(stats[p.id]); if (!(v >= a.min)) continue;
+      const top = Math.max(...ps.map(q => a.stat(stats[q.id])).filter(Number.isFinite));
+      const score = top > 0 ? v / top : 0;
+      if (!best || score > best.score) best = { a, score };
+    }
+    if (best) { out[p.id] = { award: best.a.id, icon: best.a.icon, title: t(best.a.title), line: best.a.line(stats[p.id]) }; used.add(best.a.id); }
+  }
   for (const p of ps) {
     const s = stats[p.id];
     out[p.id] ||= s.played && s.made * 2 >= s.played

@@ -261,6 +261,7 @@ function onGame(g) {
       if (playersIn(g, g.round).every(p => eff[p.id]?.src === 'confirmed')) setTimeout(() => actions['ask-yes'](), 0);
     }
     maybeReveal(g);
+    maybeResults(prev, g);
   }
   render();
 }
@@ -283,6 +284,19 @@ function maybeReveal(g) {
   if (g.phase !== 'bidding') return;
   const bids = g.bids?.[g.round] || {}, ps = playersIn(g, g.round);
   if (ps.length && ps.every(p => bids[p.id] != null)) update({ phase: 'playing' });
+}
+
+// The last trick of the round takes every phone to results. One phone does it so it happens
+// once: the dealer's, or (if the dealer's phone isn't connected) the first connected seat.
+// Only on a fresh tap (the count went up), so "Back to playing" isn't undone by itself.
+function maybeResults(prev, g) {
+  const r = g.round;
+  if (g.phase !== 'playing' || prev?.phase !== 'playing' || prev.round !== r) return;
+  if (tricksTapped(g, r) < r || tricksTapped(prev, r) >= r) return;
+  const ps = playersIn(g, r), dealer = dealerFor(g, r);
+  const driver = g.presence?.[dealer] ? dealer : ps.find(p => g.presence?.[p.id])?.id;
+  if (!driver || S.seat !== driver) return;
+  update(withHistory(g, { phase: 'results' }, '← Back to playing'));
 }
 
 function update(patch) {
@@ -1583,9 +1597,7 @@ const actions = {
   'edit-cannon'(el) { S.sheet.cannon = el.dataset.v === '1'; renderSheet(); },
   destroy(el) {
     const g = S.game, r = g.round, cur = g.destroyed?.[r] || 0, next = Math.max(0, Math.min(2, cur + +el.dataset.d));
-    const patch = { [`destroyed/${r}`]: next || null };
-    if (g.phase === 'playing' && next > cur && tricksTapped(g, r) + (next - cur) >= r) withHistory(g, Object.assign(patch, { phase: 'results' }), '← Back to playing');
-    update(patch);
+    update({ [`destroyed/${r}`]: next || null });
   },
   'open-actfor'() { S.sheet = { kind: 'actfor' }; renderSheet(); },
   'act-as'(el) { S.actingFor = el.dataset.id; S.sheet = null; render(); window.scrollTo(0, 0); },
@@ -1617,10 +1629,7 @@ const actions = {
   live(el) {
     const g = S.game, r = g.round, who = me();
     const cur = g.live?.[r]?.[who] || 0, next = Math.max(0, Math.min(r, cur + +el.dataset.d));
-    const patch = { [`live/${r}/${who}`]: next };
-    // The last trick of the round takes every phone straight to results (Back to playing undoes it).
-    if (g.phase === 'playing' && next > cur && tricksTapped(g, r) + (next - cur) >= r) withHistory(g, Object.assign(patch, { phase: 'results' }), '← Back to playing');
-    update(patch);
+    update({ [`live/${r}/${who}`]: next });
     buzz(15);
   },
   'to-results'() {
