@@ -212,7 +212,7 @@ input:focus { border-color: var(--magenta); outline: none; }
 .standings { --lane-h: 44px; position: relative; margin: 16px 0 6px; padding: 0 10px; }
 .standings .lanes { position: relative; height: calc(var(--lanes, 1) * var(--lane-h) + 22px); }
 .standings .scale { position: relative; height: 22px; border-top: var(--hair) solid var(--line-strong); }
-.standings .tick { position: absolute; top: -1px; transform: translateX(-50%); font-size: .75rem; color: var(--ink-3); font-style: italic; font-variant-numeric: tabular-nums; line-height: 1; }
+.standings .tick { position: absolute; top: -1px; transform: translateX(-50%); font-size: .75rem; color: var(--ink-2); font-style: italic; font-variant-numeric: tabular-nums; line-height: 1; }
 .standings .tick::before { content: ''; display: block; width: var(--hair); height: 5px; background: var(--line-strong); margin: 0 auto 3px; }
 .standings .tick.zero { color: var(--ink); font-weight: 700; }
 /* Motion is transform-only: the marker spans the scale and slides by --x (percent of its own width = the scale's),
@@ -832,9 +832,9 @@ p, .note { text-wrap: pretty; }
 .scores.many td small { font-size: .75rem; }
 .scores.many td.rn, .scores.many th:first-child { font-size: .75rem; }
 /* TV table screen: one grid, readable across the room */
-body.table .tv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 18px 0 12px; font-size: 1.6rem; color: var(--ink-2); }
+body.table .tv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 18px 0 12px; font-size: 1.9rem; color: var(--ink-2); }
 body.table .tv-head p { margin: 0; }
-body.table .tv-head .verdict { font-size: 1.2rem; color: var(--ink); }
+body.table .tv-head .verdict { font-size: 1.5rem; color: var(--ink); }
 .tv-grid { width: 100%; border-collapse: collapse; background: var(--surface); border: var(--hair) solid var(--line); border-radius: var(--radius); overflow: hidden; }
 .tv-grid th { text-align: left; font-size: 1rem; font-weight: 650; color: var(--ink-2); padding: 12px 18px; border-bottom: var(--hair) solid var(--line-strong); }
 .tv-grid th:not(:first-child) { text-align: right; }
@@ -1146,19 +1146,21 @@ body.table #top .code-chip { font-size: 1.15rem; padding: 6px 14px; }
 .join-name input { flex: 1; min-width: 0; }
 .join-name .btn { width: auto; padding-inline: 22px; }
 .deal-line .link.inline { margin-left: auto; min-height: 40px; padding: 8px 2px; white-space: nowrap; }
-/* Lobby seating sheet: a dealer circle on each row, an up arrow to move a seat */
-.seating .prow { grid-template-columns: 30px 34px 1fr 44px; }
-.dealer-dot { width: 30px; height: 44px; border: 0; background: none; display: grid; place-items: center; padding: 0; }
-.dealer-dot::before { content: ""; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
-.dealer-dot.on::before { background: var(--ink); box-shadow: inset 0 0 0 4px var(--ink), inset 0 0 0 6px var(--bg); }
+/* Lobby seating sheet: tap a row to make them first dealer; arrows move a seat */
+.seating .prow { grid-template-columns: 1fr 44px 44px; padding-left: 4px; }
+.dealer-pick-row { display: flex; align-items: center; gap: 10px; min-height: 52px; min-width: 0; border: 0; background: none; padding: 0 4px; text-align: left; color: inherit; font: inherit; border-radius: 10px; }
+.dealer-pick-row:hover { background: var(--tint); }
+.dealer-pick-row .who { min-width: 0; }
+.dealer-dot { flex: none; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.dealer-pick-row.on .dealer-dot { background: var(--ink); box-shadow: inset 0 0 0 4px var(--ink), inset 0 0 0 6px var(--bg); }
+.ico.down { transform: rotate(180deg); }
 /* The reveal holds the stage: through the drumroll and for a moment after the flip the bids are big */
-.bids-strip.stage .bid-cell { padding-block: 12px 9px; transition: padding .4s var(--ease); }
-.bids-strip.stage .bid-cell b { font-size: 2.5rem; transition: font-size .4s var(--ease); }
-body.fit .play-card .bids-strip.stage .bid-cell b { font-size: 2.2rem; }
-body.fit .play-card .bids-strip.wide.stage .bid-cell b { font-size: 1.8rem; }
-@media (prefers-reduced-motion: reduce) { .bids-strip.stage .bid-cell, .bids-strip.stage .bid-cell b { transition: none; } }
-.bids-strip.settle .bid-cell b { animation: settle .5s var(--ease) both; }
-@keyframes settle { from { font-size: 2.3rem; } }
+.bids-strip.stage .bid-cell { padding-block: 22px 10px; }
+.bids-strip.stage .bid-cell b { scale: 1.5; transform-origin: 50% 75%; }
+body.fit .play-card .bids-strip.wide.stage .bid-cell { padding-block: 14px 6px; }
+body.fit .play-card .bids-strip.wide.stage .bid-cell b { scale: 1.35; }
+.bids-strip.settle .bid-cell b { animation: settle .5s var(--ease) both; transform-origin: 50% 75%; }
+@keyframes settle { from { scale: 1.5; } }
 @media (prefers-reduced-motion: reduce) { .bids-strip.settle .bid-cell b { animation: none; } }
 .scores td .miss { background: repeating-linear-gradient(-45deg, var(--hatch) 0 4px, transparent 4px 8px); }
 /* Fix a bid sits centred under the full-width Round over */
@@ -1168,3 +1170,11 @@ body.table .badge { font-size: 1rem; padding: 2px 8px; }
 /* A player still on a flag sits in a tile like everyone with a character */
 .prow > svg.flag { width: 34px; height: 34px; padding: 9px 5px; box-sizing: border-box; border-radius: 10px; background: var(--tint); box-shadow: none; }
 body.table .prow > svg.flag { width: 44px; height: 44px; padding: 12px 7px; }
+/* Back and Home links: an arrow pointing back, not a door */
+.ico.back { transform: rotate(180deg); }
+/* Someone playing without a phone: their row offers to enter for them */
+.chip.for { background: transparent; border: var(--hair) dashed var(--line-strong); color: var(--ink); min-height: 36px; }
+.chip.for:hover { border-color: var(--ink-2); }
+.for-link { display: block; margin-top: 2px; min-height: 32px; padding: 4px 0; font-size: .85rem; }
+.not-me { flex: none; min-height: 44px; padding: 0 4px; }
+.scores td small .ico { width: 10px; height: 10px; margin-right: 2px; vertical-align: -1px; }
