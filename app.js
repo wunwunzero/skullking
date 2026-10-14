@@ -200,6 +200,7 @@ function route() {
   if (code === S.code && (S.code || !S.crewCode)) return render();
   S.unsub?.(); S.unsub = null;
   S.code = code.length === 4 ? code : null;
+  if (!S.code && !S.crewCode && raw && !/^crew=/.test(raw)) toast(t('No game “{code}”. Game codes are 4 letters.', { code: raw.toUpperCase().slice(0, 8) }));
   if (S.claimed && S.code) S.store.release(S.code, S.claimed).catch(() => {});
   S.changing = false;
   S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null; S.claimed = null; S.nudgeSeen = null; S.prevX = {};
@@ -418,7 +419,8 @@ function afterRender() {
   const strip = document.querySelector('.standings-strip');
   if (strip) {
     const mine = strip.querySelector('.me'), fade = () => strip.classList.toggle('more', strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2);
-    if (mine && mine.offsetLeft + mine.offsetWidth > strip.clientWidth) strip.scrollLeft = mine.offsetLeft - 24;
+    const lead = strip.querySelector('.lead');
+    if (mine && mine !== lead && mine.offsetLeft + mine.offsetWidth > strip.clientWidth) strip.scrollLeft = mine.offsetLeft - (lead ? lead.offsetWidth + 12 : 24);
     fade(); strip.onscroll = fade;
   }
   const c = document.querySelector('[data-count]');
@@ -728,8 +730,8 @@ function lobbyView(g) {
   <p class="deal-line">${icon('cards', 'sm')}<span>${t('{name} deals round 1', { name: `<b>${esc(name(dealerFor(g, 1)))}</b>` })}${g.champion ? ` · ${t('next game the deal moves one seat on')}` : ''}</span>${ps.length > 1 ? `<button class="link inline" data-act="seating">${t('Seating & dealer')}</button>` : ''}</p>
   <div class="board">
     ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${p.id === dealerFor(g, 1) ? `<span class="roles"><span class="badge">${t('deals first')}</span></span>` : ''}</div>
-      ${g.presence?.[p.id] ? `<span class="chip good">${icon('phone')}${t('On a phone')}</span>` : noPhone(g, p.id) ? `<span class="chip quiet-chip">${t('No phone · entered at the table')}</span>` : `<span class="chip quiet-chip">${t('No phone yet')}</span>`}<span></span></div>`).join('')}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === (S.actingFor || S.seat) ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${p.id === dealerFor(g, 1) ? `<span class="roles"><span class="badge">${t('deals first')}</span></span>` : ''}</div>
+      ${g.presence?.[p.id] ? `<span class="chip good">${icon('phone')}${t('On a phone')}</span>` : noPhone(g, p.id) ? `<span class="chip quiet-chip">${t('Plays without a phone')}</span>` : `<span class="chip quiet-chip">${t('Not joined yet')}</span>`}<span></span></div>`).join('')}
   </div>
   <button class="link" data-act="roster">${icon('users', 'sm')}<span>${t('Add or remove players')}</span></button>
   <p class="rules-line">${esc(rulesLine(g))}${g.crew && S.crew ? `<br>${t('Saved to {crew} when the game finishes.', { crew: esc(S.crew.name) })}` : ''}</p>
@@ -825,8 +827,10 @@ function standingsLine(g, { full = false } = {}) {
 // During play only trick counts matter: the standings shrink to one line, leader first.
 function standingsStrip(g) {
   const rank = ranking(g), top = rank[0]?.total, scored = g.round > 1;
+  const groups = [];
+  for (const x of rank) { const last = groups[groups.length - 1]; if (last && last.total === x.total) last.ids.push(x.id); else groups.push({ total: x.total, ids: [x.id] }); }
   return `<div class="standings-strip" role="img" aria-label="${t('Standings')}: ${esc(rank.map(x => `${x.name}${x.id === me() ? ` (${t('you')})` : ''} ${plain(x.total)}`).join(', '))}">
-    ${rank.map(x => `<span class="${x.id === me() ? 'me' : ''}">${scored && x.total === top && top > 0 ? icon('crown', 'crown') : ''}${flag(x.id)}<b>${plain(x.total)}</b></span>`).join('')}</div>`;
+    ${groups.map((gr, i) => `<span class="${gr.ids.includes(me()) ? 'me' : ''} ${i === 0 ? 'lead' : ''}">${scored && gr.total === top && top > 0 ? icon('crown', 'crown') : ''}<span class="stack">${gr.ids.map(id => flag(id)).join('')}</span><b>${plain(gr.total)}</b></span>`).join('')}</div>`;
 }
 
 // Round-scored card: your result first (the "nailed it" moment), then everyone's round.
@@ -858,9 +862,17 @@ function roundSlim(g, r) {
     <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span>${icon('lead', 'chev')}</button>`;
 }
 // The whole round: your outcome, everyone's points, the highlights.
+// Several nailed zero bids read as one line, not one each.
+function mergeZeros(lines) {
+  const zeros = lines.filter(l => l.kind === 'zero');
+  if (zeros.length < 2) return lines;
+  const at = lines.indexOf(zeros[0]);
+  const merged = { icon: 'target', kind: 'zero', text: t('{names} nailed zero bids', { names: zeros.map(l => name(l.id)).join(', ') }) };
+  return [...lines.slice(0, at).filter(l => l.kind !== 'zero'), merged, ...lines.slice(at).filter(l => l.kind !== 'zero')];
+}
 function roundCard(g, r, { inSheet = false } = {}) {
   const tot = totals(g), mine = meIn(g, r);
-  const lines = roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero') && l.icon !== 'down');
+  const lines = mergeZeros(roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero') && l.icon !== 'down'));
   const myScore = mine ? tot[mine].rounds[r] : null;
   const myBid = mine ? g.bids?.[r]?.[mine] : null, myTricks = mine ? g.results?.[r]?.[mine]?.tricks : null;
   const nailed = mine && myBid != null && myBid === myTricks;
@@ -975,11 +987,12 @@ function biddingView(g) {
   ${banner ? standingsStrip(g) : standingsLine(g)}
   ${banner}
   ${card}
-  <div class="section-h"><h2 class="t3">${mine && bids[mine] == null ? (waiting === 1 ? t('Waiting for you') : tn(waiting - 1, 'Waiting for you and {n} more', 'Waiting for you and {n} more')) : !waiting ? t('Revealing') : waiting <= 3 ? t('Waiting for {names}', { names: namesList(ps.filter(p => bids[p.id] == null)) }) : t('Waiting for {n}', { n: waiting })}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
+  <div class="section-h"><h2 class="t3">${mine && bids[mine] == null && S.actingFor ? (waiting === 1 ? t('Waiting for {names}', { names: esc(name(mine)) }) : t('Waiting for {names}', { names: `${esc(name(mine))} + ${waiting - 1}` }))
+    : mine && bids[mine] == null ? (waiting === 1 ? t('Waiting for you') : tn(waiting - 1, 'Waiting for you and {n} more', 'Waiting for you and {n} more')) : !waiting ? t('Revealing') : waiting <= 3 ? t('Waiting for {names}', { names: namesList(ps.filter(p => bids[p.id] == null)) }) : t('Waiting for {n}', { n: waiting })}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
   <div class="fit-scroll"><div class="board" style="--cols:${tableCols(ps.length)}">
     ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${roleBadges(g, r, p.id) ? `<span class="roles">${roleBadges(g, r, p.id)}</span>` : ''}</div>
-      ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : p.id === mine ? `<span class="chip out">${t('Not in')}</span>` : noPhone(g, p.id) || ps.length - waiting >= Math.ceil(ps.length / 2) ? nudgeChip(p.id, mine) : '<span></span>'}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === (S.actingFor || S.seat) ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${roleBadges(g, r, p.id) ? `<span class="roles">${roleBadges(g, r, p.id)}</span>` : ''}</div>
+      ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : p.id === mine ? `<span class="chip out">${t('Not in')}</span>` : noPhone(g, p.id) || ps.length - waiting >= Math.ceil(ps.length / 2) ? nudgeChip(p.id, mine) : `<span><span class="sr-only">${t('not in yet')}</span></span>`}
       <span></span></div>`).join('')}${tableFill(ps.length)}
   </div></div>`;
 }
@@ -1029,7 +1042,7 @@ function boardRows(g, r, { showLive }) {
     }[st];
     if (canGive && p.id !== mine && chip) chip = chip.replace(/^<span class="chip/, `<button type="button" data-act="trick-for" data-id="${p.id}" aria-label="${t('Give {name} a trick', { name: esc(p.name) })}" class="chip give`).replace(/<\/span>$/, `${icon('plus', 'sm give-plus')}</button>`);
     return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span class="roles">${roleBadges(g, r, p.id)}<span class="bidtxt">${t('Bid')} <b>${bid ?? '–'}</b>${!drum && g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></span></div>
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === (S.actingFor || S.seat) ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span class="roles">${roleBadges(g, r, p.id)}<span class="bidtxt">${t('Bid')} <b>${bid ?? '–'}</b>${!drum && g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></span></div>
       ${chip}<span class="total">${plain(tot[p.id].total)}</span></div>`;
   }).join('') + tableFill(playersIn(g, r).length);
 }
@@ -1055,7 +1068,9 @@ function playingView(g) {
   }
   const stage = !drum && S.stageUntil > Date.now() && !watch;
   const settle = !stage && S.settle; S.settle = false;
-  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''} ${stage || drum ? 'stage' : settle ? 'settle' : ''} ${ps.length > 5 ? 'wide' : ''}" style="--bcols:${ps.length <= 5 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
+  // Big tables: once the reveal has settled the strip is one slim row, so the list stays in view.
+  const compact = ps.length > 5 && !drum && !stage && !flip && !watch;
+  const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''} ${stage || drum ? 'stage' : settle ? 'settle' : ''} ${ps.length > 5 ? 'wide' : ''} ${compact ? 'compact' : ''}" style="--bcols:${ps.length <= 5 || compact ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
     ${ps.map((p, i) => drum
       ? `<span class="bid-cell" style="--i:${i}" role="img" aria-label="${esc(p.name)}">${flag(p.id)}<b aria-hidden="true">?</b><small>${esc(p.name)}</small></span>`
       : `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}" role="img" aria-label="${t('{name} bid {n}', { name: esc(p.name), n: bids[p.id] ?? '–' })}${g.cannon?.[r]?.[p.id] ? `, ${t('Cannonball')}` : ''}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name)}</small></span>`).join('')}
@@ -1203,7 +1218,7 @@ function resultsView(g) {
       const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? scoreFor(g, r, p.id, e) : null;
       const made = e && bid === e.tricks;
       return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}</span>${editors.some(x => x.id === p.id) ? `<span class="editing-note">${t('still editing…')}</span>` : ''}${!watch && noPhone(g, p.id) && p.id !== S.actingFor ? `<button class="link inline for-link" data-act="act-as" data-once="1" data-id="${p.id}">${t('Enter for {name}', { name: esc(p.name) })}</button>` : ''}</div>
+        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === (S.actingFor || S.seat) ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}</span>${editors.some(x => x.id === p.id) ? `<span class="editing-note">${t('still editing…')}</span>` : ''}${!watch && noPhone(g, p.id) && p.id !== S.actingFor ? `<button class="link inline for-link" data-act="act-as" data-once="1" data-id="${p.id}">${t('Enter for {name}', { name: esc(p.name) })}</button>` : ''}</div>
         ${e ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : ''}
         <span class="total">${plain(tot[p.id].total + (s || 0))}</span></div>`;
     }).join('')}${tableFill(ps.length)}
@@ -1751,7 +1766,7 @@ async function removePlayer(pid) {
 
 function seatingSheet() {
   const g = S.game, ps = sortedPlayers(g).filter(p => !gone(g, p)), d = dealerFor(g, 1);
-  return `<p class="small muted" style="margin-top:0">${t('Order around the table, going left. Tap the circle for who deals round 1.')}</p>
+  return `<p class="small muted" style="margin-top:0">${t('Order around the table, clockwise. Tap a player to make them deal round 1.')}</p>
   <div class="board roster seating" role="radiogroup" aria-label="${t('Deals round 1')}">${ps.map((p, i) => `<div class="prow" style="--crew:${color(p.id)}">
     <button class="dealer-pick-row ${p.id === d ? 'on' : ''}" role="radio" aria-checked="${p.id === d}" data-act="first-dealer" data-id="${p.id}" aria-label="${t('{name} deals first', { name: esc(p.name) })}"><span class="dealer-dot" aria-hidden="true"></span>${flag(p.id)}
       <span class="who"><b><span class="nm">${esc(p.name)}</span></b>${p.id === d ? `<span class="roles"><span class="badge">${t('deals first')}</span></span>` : ''}</span></button>
