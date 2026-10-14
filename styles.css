@@ -1050,3 +1050,9 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--magenta); o
 /* Blur backdrops only where the GPU can afford them */
 @media (max-resolution: 1.5dppx) { #top, .dock { backdrop-filter: none; -webkit-backdrop-filter: none; } }
 .qr img { image-rendering: pixelated; }
+
+/* Lobby: who deals, in words */
+.deal-line { display: flex; align-items: center; gap: 8px; margin: 0 2px 8px; font-size: .9rem; color: var(--ink-2); }
+.deal-line .ico { color: var(--ink-3); }
+.hl.extras li b { font-weight: 700; }
+.card.app-hint .btn.mini { margin-top: 0; }

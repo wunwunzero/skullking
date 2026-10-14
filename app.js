@@ -471,8 +471,21 @@ function homeView() {
 // A one-time tip to put the app on the home screen, so it opens full-screen with no browser bar.
 let installEvent = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; if (!S.code) render(); });
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
+// Safari and the home-screen app keep separate memories on iOS, so a QR scanned in Safari
+// forgets your seat and character. A quick hint sends people back to the installed app.
+function openInAppHint() {
+  if (isStandalone() || !/iPhone|iPad|iPod/i.test(navigator.userAgent)) return '';
+  let installed = false, seen = false;
+  try { installed = localStorage.getItem('sk.installed') === 'yes'; seen = sessionStorage.getItem('sk.appHint') === 'done'; } catch {}
+  if (!installed || seen) return '';
+  return `<div class="card install-tip app-hint">${icon('phone')}<div><b>${t('You also have this on your home screen')}</b>
+    <span>${t('Opening the game there keeps your seat and character from last time. Copy the code {code} and type it in the app.', { code: esc(S.code) })}</span></div>
+    <button class="icon-btn" data-act="app-hint-dismiss" aria-label="${t('Dismiss')}">${icon('close')}</button></div>`;
+}
+
 function installTip() {
-  const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone;
+  const standalone = isStandalone();
   let seen = false; try { seen = localStorage.getItem('sk.installTip') === 'done'; } catch {}
   if (standalone || seen || !/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) return '';
   const ios = /iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -561,6 +574,7 @@ async function createGame(names, dealer, opts = {}) {
 function seatView() {
   const ps = sortedPlayers(S.game).filter(p => !gone(S.game, p));
   return `
+  ${openInAppHint()}
   <h2 style="margin-top:24px">${t('Who are you?')}</h2>
   <p class="muted small">${t('Game {code}. Pick your name to bid from this phone.', { code: esc(S.code) })}</p>
   <div class="seat-list">
@@ -628,6 +642,7 @@ function lobbyView(g) {
     ${shareButtons()}
   </div>
   <div class="section-h"><h2 class="t3">${t('At the table')}</h2><span>${tn(ps.length, '{n} player', '{n} players')}</span></div>
+  <p class="deal-line">${icon('cards', 'sm')}<span>${t('{name} deals round 1', { name: `<b>${esc(name(dealerFor(g, 1)))}</b>` })}${g.champion ? ` · ${t('the deal moves one seat each game')}` : ''}</span></p>
   <div class="board">
     ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${p.id === dealerFor(g, 1) ? `<span class="roles"><span class="badge">${t('deals first')}</span></span>` : ''}</div>
@@ -1646,9 +1661,16 @@ function cheatSheet() {
     'Tigress: you choose. Play her as a Pirate or as an Escape.',
     'Same special cards in one trick: the first one played wins.',
     'Pirate, Skull King and Mermaid all in one trick: the Mermaid wins.',
-    ...(exp.kraken ? ['Kraken: nobody wins the trick.'] : []),
-    ...(exp.whale ? ['White Whale: special cards lose their power; the highest number wins.'] : []),
-    ...(exp.loot ? ['Loot: plays like an Escape.'] : []),
+  ];
+  // What this game's optional rules do, only when they're switched on.
+  const extras = [
+    ...(g?.scoring === 'rascal' ? [
+      ['target', 'Grapeshot', 'Your usual bid: 10 points a card if exact, half if you miss by one, nothing if by more.'],
+      ['cannon', 'Cannonball', 'Call it with your bid: 15 points a card if exact, nothing if you miss at all.'],
+    ] : []),
+    ...(exp.kraken ? [['kraken', 'Kraken', 'The trick is destroyed: nobody wins it. Whoever would have won leads next.']] : []),
+    ...(exp.whale ? [['whale', 'White Whale', 'Special cards lose their power: the highest number wins, any suit.']] : []),
+    ...(exp.loot ? [['loot', 'Loot', 'Plays like an Escape. You and whoever wins the trick both get +20 if you both make your bids.']] : []),
   ];
   return `<p class="small muted" style="margin-top:0">${t('Strongest at the top. Follow the suit that was led if you can; special cards can always be played.')}</p>
   <ol class="ladder">
@@ -1665,7 +1687,9 @@ function cheatSheet() {
       ${king}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${pirate}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${mermaid}<span>${icon('lead', 'sm')}<small>${t('beats')}</small></span>${king}
     </div>
   </div>
-  <ul class="hl">${notes.map(n => `<li>${icon('check', 'sm')}<span>${esc(t(n))}</span></li>`).join('')}</ul>`;
+  <ul class="hl">${notes.map(n => `<li>${icon('check', 'sm')}<span>${esc(t(n))}</span></li>`).join('')}</ul>
+  ${extras.length ? `<h3 class="t3" style="margin:18px 2px 8px">${t('In this game')}</h3>
+  <ul class="hl extras">${extras.map(([ic, name, line]) => `<li>${icon(ic, 'sm')}<span><b>${esc(t(name))}</b> ${esc(t(line))}</span></li>`).join('')}</ul>` : ''}`;
 }
 
 // ---------- actions ----------
@@ -1755,6 +1779,7 @@ const actions = {
   'tv-sound-off'() { try { localStorage.setItem('sk.tvSound', 'off'); } catch {} render(); },
   async install() { const e = installEvent; installEvent = null; if (e) { e.prompt(); await e.userChoice.catch(() => {}); } actions['install-dismiss'](); },
   'install-dismiss'() { try { localStorage.setItem('sk.installTip', 'done'); } catch {} render(); },
+  'app-hint-dismiss'() { try { sessionStorage.setItem('sk.appHint', 'done'); } catch {} render(); },
   'open-game'(el) { location.hash = el.dataset.code; },
   scores() { S.sheet = { kind: 'scores' }; renderSheet(); },
   menu() { S.sheet = { kind: 'menu' }; renderSheet(); },
@@ -2083,6 +2108,7 @@ document.addEventListener('submit', async e => {
     return;
   }
   S.store.onConnection(on => { S.online = on; if (S.game) renderTop(); });
+  if (isStandalone()) { try { localStorage.setItem('sk.installed', 'yes'); } catch {} }
   route();
   cleanupOldGames();
   if ('serviceWorker' in navigator && location.hostname !== '127.0.0.1' && location.hostname !== 'localhost') watchForUpdates();

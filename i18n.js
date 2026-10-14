@@ -453,6 +453,16 @@ export const DICT = {
     'Sea Witch': '海巫',
 
     // crews & history
+    "You also have this on your home screen": "你的主屏幕上也有这个应用",
+    "Opening the game there keeps your seat and character from last time. Copy the code {code} and type it in the app.": "在那里打开游戏，会记住你上次的座位和角色。复制代码 {code}，到应用里输入。",
+    "{name} deals round 1": "第1轮由 {name} 发牌",
+    "the deal moves one seat each game": "每局发牌者往下移一个座位",
+    "In this game": "本局规则",
+    "Your usual bid: 10 points a card if exact, half if you miss by one, nothing if by more.": "普通预测：命中每张牌10分，差1墩得一半，差更多0分。",
+    "Call it with your bid: 15 points a card if exact, nothing if you miss at all.": "和预测一起宣布：命中每张牌15分，差任何一墩都是0分。",
+    "The trick is destroyed: nobody wins it. Whoever would have won leads next.": "这一墩被摧毁，没人赢。原本会赢的人下一墩先出。",
+    "Special cards lose their power: the highest number wins, any suit.": "特殊牌失效：不论花色，数字最大的赢。",
+    "Plays like an Escape. You and whoever wins the trick both get +20 if you both make your bids.": "当作逃跑牌。你和赢这一墩的人若都命中预测，各得 +20。",
     "Trick destroyed": "这一墩被摧毁",
     "Undo a destroyed trick": "撤销一次摧毁",
     "Tap once so the TV can play the drumroll and chimes": "点一下，电视才能播放鼓声和提示音",
@@ -1063,6 +1073,16 @@ export const DICT = {
     'Sea Witch': 'Ahli Sihir Laut',
 
     // crews & history
+    "You also have this on your home screen": "Anda juga ada aplikasi ini di skrin utama",
+    "Opening the game there keeps your seat and character from last time. Copy the code {code} and type it in the app.": "Buka permainan di situ supaya tempat duduk dan watak anda diingati. Salin kod {code} dan taip dalam aplikasi.",
+    "{name} deals round 1": "{name} agih pusingan 1",
+    "the deal moves one seat each game": "giliran agih beralih satu tempat setiap permainan",
+    "In this game": "Dalam permainan ini",
+    "Your usual bid: 10 points a card if exact, half if you miss by one, nothing if by more.": "Bida biasa: 10 mata setiap kad jika tepat, separuh jika lari satu, tiada jika lari lebih.",
+    "Call it with your bid: 15 points a card if exact, nothing if you miss at all.": "Umumkan bersama bida: 15 mata setiap kad jika tepat, tiada jika lari langsung.",
+    "The trick is destroyed: nobody wins it. Whoever would have won leads next.": "Trik dimusnahkan: tiada siapa menang. Orang yang sepatutnya menang main dahulu seterusnya.",
+    "Special cards lose their power: the highest number wins, any suit.": "Kad istimewa hilang kuasa: nombor tertinggi menang, apa-apa sut.",
+    "Plays like an Escape. You and whoever wins the trick both get +20 if you both make your bids.": "Dimainkan seperti Lari. Anda dan pemenang trik itu dapat +20 setiap seorang jika kedua-duanya tepat bida.",
     "Trick destroyed": "Trik dimusnahkan",
     "Undo a destroyed trick": "Buat asal satu trik dimusnahkan",
     "Tap once so the TV can play the drumroll and chimes": "Tekan sekali supaya TV boleh mainkan bunyi dram dan loceng",
