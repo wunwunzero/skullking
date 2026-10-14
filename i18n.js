@@ -453,6 +453,11 @@ export const DICT = {
     'Sea Witch': '海巫',
 
     // crews & history
+    "Trick destroyed": "这一墩被摧毁",
+    "Undo a destroyed trick": "撤销一次摧毁",
+    "Tap once so the TV can play the drumroll and chimes": "点一下，电视才能播放鼓声和提示音",
+    "Turn sound on": "打开声音",
+    "No sound": "不要声音",
     "Every trick is in. Moving to results…": "所有墩都记完了。正在进入结果…",
     "Not moving? Tap here": "没有跳转？点这里",
     "Tricks don't add up: check the numbers": "墩数对不上：请核对数字",
@@ -1058,6 +1063,11 @@ export const DICT = {
     'Sea Witch': 'Ahli Sihir Laut',
 
     // crews & history
+    "Trick destroyed": "Trik dimusnahkan",
+    "Undo a destroyed trick": "Buat asal satu trik dimusnahkan",
+    "Tap once so the TV can play the drumroll and chimes": "Tekan sekali supaya TV boleh mainkan bunyi dram dan loceng",
+    "Turn sound on": "Hidupkan bunyi",
+    "No sound": "Tanpa bunyi",
     "Every trick is in. Moving to results…": "Semua trik sudah masuk. Beralih ke keputusan…",
     "Not moving? Tap here": "Tak beralih? Tekan di sini",
     "Tricks don't add up: check the numbers": "Jumlah trik tak sama: semak nombor",

@@ -749,6 +749,13 @@ const giveTipSeen = () => { try { return localStorage.getItem('sk.giveTip') === 
 
 // The table screen on a TV or tablet: everything in one grid that reads from across the room.
 const tvMode = () => S.seat === 'watch' && !S.actingFor && innerWidth >= 700;
+// Browsers only play sound after a tap. The table screen gets no taps, so it asks for one.
+function tvSoundBar() {
+  if (!S.sound || audio?.state === 'running' || S.tvSoundOff) return '';
+  return `<div class="tv-sound" role="status"><span>${icon('bell', 'sm')}${t('Tap once so the TV can play the drumroll and chimes')}</span>
+    <button class="btn mini" data-act="tv-sound">${t('Turn sound on')}</button><button class="link" data-act="tv-sound-off">${t('No sound')}</button></div>`;
+}
+
 function tvView(g) {
   const r = g.round, ps = playersIn(g, r), bids = g.bids?.[r] || {}, live = g.live?.[r] || {}, tot = totals(g);
   const eff = g.phase === 'results' ? effectiveResults(g, r) : {};
@@ -771,7 +778,7 @@ function tvView(g) {
     </div>
     ${flip && hint ? `<p class="verdict tv-verdict">${icon(hint.icon)}<span>${esc(hint.text)}</span></p>` : ''}`;
   }
-  return `${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
+  return `${tvSoundBar()}${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
   ${standingsLine(g, { full: true })}
   <div class="tv-head"><p>${head}</p>${hint ? `<p class="verdict">${icon(hint.icon, 'sm')}<span>${esc(hint.text)}</span></p>` : ''}</div>
   <table class="tv-grid ${drum ? 'drum' : flip ? 'flip' : ''}" style="--rows:${ps.length}"><thead><tr><th>${t('Players')}</th><th>${t('Bid')}</th><th>${t(g.phase === 'results' ? 'won' : 'Tricks')}</th>${g.phase === 'results' ? `<th>${t('This round')}</th>` : ''}<th>${t('Total')}</th></tr></thead><tbody>
@@ -900,12 +907,14 @@ function playingView(g) {
     <div class="counter">
       <button class="btn minus" data-act="live" data-d="-1" ${myGot <= 0 ? 'disabled' : ''} aria-label="${t('Remove a trick')}">${icon('minus')}</button>
       <button class="btn primary plus" data-act="live" data-d="1" ${done || drum ? 'disabled' : ''}>${icon('plus')}${S.actingFor ? t('{name} won a trick', { name: esc(name(mine)) }) : t('I won a trick')}</button>
-    </div>` : ''}
+    </div>
+    ${canDestroy && me() === dealerFor(g, r) ? `<button class="btn destroyed-btn" data-act="destroy" data-d="1" ${done || drum || destroyed >= 2 ? 'disabled' : ''}>${icon('kraken', 'sm')}${t('Trick destroyed')}${destroyed ? ` <span class="chip">${destroyed}</span>` : ''}</button>
+      ${destroyed ? `<button class="link" data-act="destroy" data-d="-1">${t('Undo a destroyed trick')}</button>` : ''}` : ''}` : ''}
     ${watch ? `<p class="table-line small muted">${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}</p>`
       : `<p class="table-line small muted">${t('Table:')} <b class="sounding">${played}</b> ${tn(r, 'of {n} trick played', 'of {n} tricks played')} · ${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}</p>`}
   </div>
   ${!mine && me() && !S.actingFor && (g.players[me()]?.from || 1) > r ? joinsCard(g.players[me()]) : ''}
-  ${canDestroy && !watch && (me() === dealerFor(g, r)) ? destroyCard(destroyed, done) : ''}
+  ${canDestroy && !watch && !mine && me() === dealerFor(g, r) ? destroyCard(destroyed, done) : ''}
   <div class="board" style="--cols:${tableCols(ps.length)}">${boardRows(g, r, { showLive: true })}</div>
   ${!watch && !giveTipSeen() ? `<p class="small muted give-tip">${icon('plus', 'sm')}${t('Someone’s phone away? Tap their chip to give them a trick.')}</p>` : ''}
   ${watch ? '' : `${done ? `<p class="small muted stuck" role="status">${t('Every trick is in. Moving to results…')} <button class="link inline" data-act="to-results">${t('Not moving? Tap here')}</button></p>`
@@ -1731,6 +1740,8 @@ const actions = {
     document.querySelector('[data-act="toggle-sound"]')?.focus({ preventScroll: true });
   },
   'reload-app'() { location.reload(); },
+  'tv-sound'() { try { audio ||= new AudioContext(); audio.resume().then(() => { chime(); render(); }); } catch {} },
+  'tv-sound-off'() { S.tvSoundOff = true; render(); },
   async install() { const e = installEvent; installEvent = null; if (e) { e.prompt(); await e.userChoice.catch(() => {}); } actions['install-dismiss'](); },
   'install-dismiss'() { try { localStorage.setItem('sk.installTip', 'done'); } catch {} render(); },
   'open-game'(el) { location.hash = el.dataset.code; },

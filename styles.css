@@ -1027,3 +1027,12 @@ body.table .tv-head { font-size: clamp(1.2rem, 1.8vw, 2rem); }
 body.table .tv-finale ~ .tv-board .tv-grid tbody tr { height: auto; }
 body.table .tv-finale ~ .tv-board .tv-grid td { padding: 8px 18px; }
 body.table .tv-finale ~ .standings { --lane-h: 44px; --lane-n: 44; }
+
+/* Dealer: the Kraken / White Whale control sits with the trick counter */
+.destroyed-btn { margin-top: 10px; gap: 8px; }
+.destroyed-btn .chip { padding: 1px 8px; font-size: .8rem; }
+/* TV: one tap to unlock sound */
+.tv-sound { display: flex; align-items: center; gap: 14px; margin: 8px 0 4px; padding: 10px 14px; border-radius: 14px;
+  border: var(--hair) solid var(--line-strong); background: var(--surface); font-size: 1.05rem; }
+.tv-sound > span { display: flex; align-items: center; gap: 8px; flex: 1; }
+.tv-sound .btn.mini { width: auto; }
