@@ -1919,9 +1919,11 @@ const actions = {
   async score() {
     const g = S.game, r = g.round, eff = effectiveResults(g, r), patch = {};
     if (S.game.phase !== 'results' || S.game.round !== r) return;
+    // Anyone this phone hasn't heard from gets their live count saved, but only if nothing is
+    // there yet: their own save (bonuses included) may still be on its way here.
     for (const [pid, e] of Object.entries(eff)) {
       if (e.src === 'confirmed') continue;
-      patch[`results/${r}/${pid}`] = { tricks: e.tricks };
+      S.store.setIfMissing(S.code, `results/${r}/${pid}`, { tricks: e.tricks });
     }
     const last = r >= ROUNDS;
     Object.assign(patch, { phase: last ? 'done' : 'bidding', round: last ? r : r + 1, undo: null });

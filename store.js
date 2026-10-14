@@ -46,6 +46,11 @@ async function firebaseStore() {
     },
     // Multi-path update relative to the game: {'bids/3/p1': 2, phase: 'playing'}; null deletes.
     update(code, patch) { return db.update(gref(code), patch); },
+    // Write a value only if nothing is saved there yet (a transaction, so a write that is still
+    // on its way from another phone is never overwritten).
+    setIfMissing(code, path, value) {
+      return db.runTransaction(gref(code, path), cur => (cur === null ? value : undefined)).catch(() => {});
+    },
     // Mark this device as holding a seat; Firebase clears it if the phone drops off.
     async claim(code, pid, device) {
       const r = gref(code, `presence/${pid}`);
@@ -107,6 +112,9 @@ function localStore() {
     async create(code, game) { write(code, g => { g[code] = game; }); },
     subscribe: games.subscribe,
     async update(code, patch) { games.update(code, patch); },
+    async setIfMissing(code, path, value) {
+      write(code, g => { if (g[code] && path.split('/').reduce((o, k) => o?.[k], g[code]) == null) setPath(g[code], path, value); });
+    },
     async claim(code, pid, device) {
       await store.update(code, { [`presence/${pid}`]: device });
       // No server to notice a closed tab, so release on the way out.
