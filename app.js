@@ -212,7 +212,7 @@ function route() {
   render();
 }
 window.addEventListener('hashchange', route);
-let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.seat === 'watch') render(); }, 150); });
+let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.seat === 'watch' || S.game) render(); }, 150); });
 
 function onGame(g) {
   const prev = S.game;
@@ -330,7 +330,9 @@ function render() {
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   // Bidding and playing fit the phone: the page doesn't scroll, the player list does (inside its box).
-  document.body.classList.toggle('fit', !!S.game && S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700);
+  // Tall enough (700px+) to hold the action card at full size: the page stays put and the player
+  // list scrolls inside its box. Shorter screens simply scroll, with nothing shrunk.
+  document.body.classList.toggle('fit', !!S.game && S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700 && innerHeight >= 700);
   renderTop();
   if (!S.code && S.setup) { $app.innerHTML = setupView(); }
   else if (!S.code && S.crewCode) { $app.innerHTML = S.crew === undefined ? `<p class="loading">${t('Finding the ship…')}</p>` : S.crew ? crewHomeView(S.crew) : noCrewView(); }

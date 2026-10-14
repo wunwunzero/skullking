@@ -1109,23 +1109,6 @@ body.fit .play-card .bids-strip.wide::-webkit-scrollbar { display: none; }
 body.fit .play-card .bids-strip.wide .bid-cell { flex: 0 0 64px; }
 /* The stuck line + Round over fallback are compact too */
 body.fit .stuck { margin: 8px 2px 0; }
-/* Short Android screens (budget phones, or Chrome's bar showing): the action card tightens so the
-   player list keeps at least two rows in view. */
-@media (max-height: 660px) {
-  body.fit .standings-strip { margin: 4px 0 6px; }
-  body.fit .card.action, body.fit .play-card { margin: 6px 0; padding: 10px 12px; }
-  body.fit .play-card .bid-cell { padding: 4px 3px 3px; }
-  body.fit .play-card .bid-cell b { font-size: 1.3rem; }
-  body.fit .play-card .bid-cell .ava { width: 22px; height: 22px; }
-  body.fit .play-card .verdict { margin: 6px 0 0; }
-  body.fit .mine-line { margin-top: 6px; }
-  body.fit .counter .btn { min-height: 58px; }
-  body.fit .play-card .table-line { display: none; }
-  body.fit main > .section-h { margin: 6px 2px 4px; }
-  body.fit main > .fit-scroll { min-height: 130px; }
-  body.fit .bid-grid button { min-height: 52px; }
-  body.fit .card.action p.muted { display: none; }
-}
 /* Very narrow phones: the round title drops a size so "Round 10 / 10" stays whole */
 @media (max-width: 340px) {
   #top .round b { font-size: .9rem; }
