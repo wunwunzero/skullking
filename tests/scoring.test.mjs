@@ -15,7 +15,7 @@ test('bid missed: -10 per trick off, bonuses dropped', () => {
 
 test('zero bid: ±10 x round', () => {
   assert.equal(roundScore(7, 0, { tricks: 0 }), 70);
-  assert.equal(roundScore(7, 0, { tricks: 0, std14: 1 }), 80);
+  assert.equal(roundScore(7, 0, { tricks: 0, std14: 1 }), 70);   // no tricks: nothing captured, so no 14
   assert.equal(roundScore(7, 0, { tricks: 2 }), -70);
   assert.equal(roundScore(7, 0, { tricks: 1, skullKing: 1 }), -70);
 });
@@ -35,8 +35,8 @@ const game = {
   },
   results: {
     1: { a: { tricks: 1 }, b: { tricks: 0 }, c: { tricks: 0 } },          // a 20, b 10, c 10
-    2: { a: { tricks: 2 }, b: { tricks: 0 }, c: { tricks: 0, std14: 1 } }, // a -10, b -10, c 30
-    3: { a: { tricks: 0 }, b: { tricks: 2, black14: 1 }, c: { tricks: 1 } }, // a 30, b 60, c 20
+    2: { a: { tricks: 2 }, b: { tricks: 0 }, c: { tricks: 0 } },          // a -10, b -10, c 20
+    3: { a: { tricks: 0 }, b: { tricks: 2, black14: 1 }, c: { tricks: 1, std14: 1 } }, // a 30, b 60, c 30
   },
 };
 
@@ -241,4 +241,15 @@ test('crew: personal stats, head to head, records, usual seating', () => {
   const rec = records(crew);
   assert.equal(rec.highGame.member, 'mben');
   assert.deepEqual(usualSeating(crew).recent, ['mben', 'mcat', 'mana']);
+});
+
+test('capture bonuses need a trick; Loot does not', () => {
+  // zero bid made: a stray Black 14 can't count (nothing was captured), Loot still does
+  assert.equal(roundScore(3, 0, { tricks: 0, black14: 1 }), 30);
+  assert.equal(roundScore(3, 0, { tricks: 0, loot: 1 }), 50);
+  assert.equal(roundScore(3, 1, { tricks: 1, black14: 1 }), 40);
+  const g = { expansions: { loot: true } };
+  assert.deepEqual(bonusKeys(g, 0), ['loot']);
+  assert.equal(bonusKeys(g, 2).length, 6);
+  assert.equal(bonusKeys({}).length, 5);
 });

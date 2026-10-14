@@ -13,12 +13,15 @@ export const BONUS = {
   loot:      { pts: 20, max: 2, label: 'Loot alliances',          hint: 'Only if your Loot ally also made their bid', exp: 'loot' },
 };
 export const BONUS_KEYS = Object.keys(BONUS);
-// Bonus keys in play for this game (Loot only with that expansion).
-export const bonusKeys = game => BONUS_KEYS.filter(k => !BONUS[k].exp || game?.expansions?.[BONUS[k].exp]);
+// Every bonus but Loot is a card captured in a trick you won, so it needs at least one trick.
+const needsTrick = k => k !== 'loot';
+// Bonus keys in play for this game (Loot only with that expansion); pass tricks to drop the
+// captures that are impossible with 0 tricks.
+export const bonusKeys = (game, tricks) => BONUS_KEYS.filter(k => (!BONUS[k].exp || game?.expansions?.[BONUS[k].exp]) && !(tricks === 0 && needsTrick(k)));
 
 export function bonusPoints(res) {
   if (!res) return 0;
-  return BONUS_KEYS.reduce((s, k) => s + (res[k] || 0) * BONUS[k].pts, 0);
+  return BONUS_KEYS.reduce((s, k) => s + (res.tricks === 0 && needsTrick(k) ? 0 : (res[k] || 0) * BONUS[k].pts), 0);
 }
 
 // Score for one player in one round. Bonuses only count when the bid is made exactly
