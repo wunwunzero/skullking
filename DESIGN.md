@@ -480,11 +480,17 @@ A crew page reached from a card at the top of the home screen ("Your crew", name
 ### Lock In and Score
 Each player locks in their own round (tricks plus any bonuses) with the magenta "Lock in my round" in the results dock, under the thumb; the card above holds the steppers and says "Locked in" once done, and the dock then switches to Score. The last trick of the round takes every phone to results on its own (the dealer's phone drives it). The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
 
+### Crew Logbook and Player Record
+The crew page leads with the season voyage chart (wins after each game, step lines) right under the crew name, then the last-winner card and New game. The leaderboard opens with a Standings Line of wins (same bands, ticks and markers as the game; tied sailors share a marker) above the tappable rows. A player's sheet is a record, not a tile grid: a strip of four soundings (games, wins, average, bid accuracy) between hairlines, a game-by-game score line in their character colour with wins as brass dots and the best/worst labelled, then a short log (best game, best round, bids made, zero bids, favourite character) and head to head.
+
+### Giving a Trick
+During play, another player's status chip is a button ("Give Ben a trick", with a small plus): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.
+
 ### Ties on the Standings Line
 Players on the same score share one marker: their tiles overlap like a hand of cards (each later tile −9px with a surface-coloured ring) beside one sounding. A fresh game is one tag, not a stack of zeros. Ticks use a true minus.
 
 ### Table Screen (TV)
-At 700px and wider the table screen is one dense grid instead of the phone layout: a head line (who we're waiting for, tricks played and who leads, or how many have locked in) with the bid-total verdict, then a hairline table of Players · Bid · Tricks · This round · Total. Names 1.6rem, numbers 2.1rem italic soundings, 44px tiles, the crew-colour wash on each row, brass crown on the leader's total. Eight players fit a 1280×800 screen.
+At 700px and wider the table screen is one dense grid instead of the phone layout: a head line (who we're waiting for, tricks played and who leads, or how many have locked in) with the bid-total verdict, then a hairline table of Players · Bid · Tricks · This round · Total. Names 1.6rem, numbers 2.1rem italic soundings, 44px tiles, the crew-colour wash on each row, brass crown on the leader's total. A wide Standings Line sits above it, and on the reveal the Bid column shivers face down through the drumroll, then flips row by row. Eight players fit a 1280×800 screen.
 
 ### Confirm Sheet
 Destructive or seat-taking choices (remove a player, take over a seat, start a season, remove a game or crew) use the bottom sheet, not the browser's confirm(): the question as the title, one plain sentence of consequence, the primary button naming the action ("Remove", "Take over"), then a ghost Cancel. Cancelling returns to the sheet you came from.
