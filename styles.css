@@ -186,11 +186,6 @@ input:focus { border-color: var(--magenta); outline: none; }
 /* ---------- setup ---------- */
 .name-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .name-row .flag { margin: 0 4px; }
-.name-row .deal {
-  flex: none; min-height: 44px; border-radius: 10px; border: var(--hair) solid var(--line-strong); background: transparent;
-  padding: 0 12px; font-size: .82rem; font-weight: 650; color: var(--ink-2);
-}
-.name-row .deal.on { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .name-row .x { flex: none; width: 44px; height: 44px; border-radius: 10px; border: 0; background: transparent; color: var(--ink-3); display: grid; place-items: center; }
 .name-row .x:hover { background: var(--tint); color: var(--ink); }
 .seg { display: grid; grid-template-columns: 1fr 1fr; border: var(--hair) solid var(--line-strong); border-radius: 13px; padding: 3px; background: var(--surface); }
@@ -597,7 +592,6 @@ h2.t3 { font-size: 1.05rem; font-weight: 700; margin-bottom: 8px; letter-spacing
 .link { align-items: flex-start; }
 
 /* Dealer choice as one radio group */
-.name-row .deal { display: inline-flex; align-items: center; gap: 4px; min-width: 44px; justify-content: center; }
 .radio-dot { width: 16px; height: 16px; border-radius: 50%; border: var(--hair) solid var(--ink-3); display: block; }
 
 /* Character picker: equal cards, chips for taken/locked, champion's reward first */
@@ -772,7 +766,7 @@ details.fold > .hl, details.fold > .board { margin-top: 6px; }
 details.fold > .board .prow { grid-template-columns: 34px 1fr auto; }
 /* Season voyage chart */
 .card.voyage .chart { margin-top: 4px; }
-.chart text.ini { fill: #fff; font-size: 9px; font-weight: 800; font-style: normal; }
+.chart text.ini { fill: #fff; font-size: 11px; font-weight: 800; font-style: normal; }
 .legend .ava { width: 20px; height: 20px; border-radius: 5px; font-size: .7rem; }
 .member-head small { display: block; font-size: .8rem; color: var(--ink-3); margin-top: 1px; }
 .member-head > div > span { margin-top: 4px; }
@@ -802,8 +796,6 @@ body.table .standings { --lane-h: 50px; --lane-n: 50; }
 .code-chip::after { content: ''; position: absolute; inset: -4px -2px; }
 #top .icon-btn { min-width: 44px; padding: 0 6px; }
 /* Setup: the dealer control names itself */
-.name-row .deal .deal-hint { font-size: .78rem; color: var(--ink-3); }
-.name-row .deal { gap: 6px; }
 /* Lobby: QR shrinks once every seat is on a phone; Start lives in the dock */
 .card.share.joined .qr img { width: 112px; height: 112px; }
 p, .note { text-wrap: pretty; }
@@ -830,7 +822,6 @@ p, .note { text-wrap: pretty; }
 .marker .tag .nm-cut { max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .marker .tag .nm-cut { display: inline-block; vertical-align: bottom; }
 /* Setup: one dealer picker under the list, so each row is name + move + remove */
-.dealer-pick { display: grid; gap: 6px; margin: 14px 2px 0; font-size: .875rem; color: var(--ink-2); font-weight: 600; }
 /* Lobby: who is on a phone */
 .chip.quiet-chip { background: transparent; border-color: var(--line); color: var(--ink-3); font-weight: 600; }
 .board .prow > .chip { justify-self: end; }
@@ -1054,7 +1045,7 @@ body.table .tv-finale ~ .standings .lanes { padding-top: 12px; }
 .destroyed-btn .chip { padding: 1px 8px; font-size: .8rem; }
 /* TV: one tap to unlock sound */
 .tv-sound { position: fixed; right: 24px; bottom: 24px; z-index: 30; max-width: min(560px, calc(100vw - 48px)); display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 14px;
-  border: var(--hair) solid var(--line-strong); background: var(--surface); font-size: 1.05rem; box-shadow: 0 8px 28px rgba(0, 0, 0, .22); }
+  border: var(--hair) solid var(--line-strong); background: var(--surface); font-size: 1.05rem; box-shadow: var(--shadow); }
 .tv-sound > span { display: flex; align-items: center; gap: 8px; flex: 1; }
 .tv-sound .btn.mini { width: auto; }
 
@@ -1112,9 +1103,10 @@ body.fit .give-tip { margin: 6px 2px 0; }
 body.fit [data-act="to-results"].btn { margin-top: 8px; min-height: 44px; }
 body.fit .link[data-act="fix-bids"] { min-height: 36px; padding-block: 4px; }
 /* Big tables: the bids strip is one compact row that scrolls sideways instead of two tall rows */
-body.fit .play-card .bids-strip.wide { display: flex; overflow-x: auto; scrollbar-width: none; gap: 5px; }
-body.fit .play-card .bids-strip.wide::-webkit-scrollbar { display: none; }
-body.fit .play-card .bids-strip.wide .bid-cell { flex: 0 0 64px; }
+/* 6-8 players: two rows of compact cells, so every bid is on screen at the reveal */
+body.fit .play-card .bids-strip.wide .bid-cell { padding: 4px 2px 3px; }
+body.fit .play-card .bids-strip.wide .bid-cell .ava { width: 20px; height: 20px; }
+body.fit .play-card .bids-strip.wide .bid-cell b { font-size: 1.3rem; }
 /* The stuck line + Round over fallback are compact too */
 body.fit .stuck { margin: 8px 2px 0; }
 /* Very narrow phones: the round title drops a size so "Round 10 / 10" stays whole */
@@ -1148,3 +1140,31 @@ body.table #top .code-chip { font-size: 1.15rem; padding: 6px 14px; }
 .link .link-main { text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line-strong); }
 .link:hover .link-main { text-decoration-color: currentColor; }
 .link .link-sub { display: block; margin-top: 2px; font-size: .8rem; font-weight: 500; color: var(--ink-3); }
+/* Setup and joining: your own name, then anyone without a phone */
+.setup-h { margin: 16px 2px 8px; }
+.join-name { display: flex; gap: 10px; margin: 10px 0 4px; }
+.join-name input { flex: 1; min-width: 0; }
+.join-name .btn { width: auto; padding-inline: 22px; }
+.deal-line .link.inline { margin-left: auto; min-height: 40px; padding: 8px 2px; white-space: nowrap; }
+/* Lobby seating sheet: a dealer circle on each row, an up arrow to move a seat */
+.seating .prow { grid-template-columns: 30px 34px 1fr 44px; }
+.dealer-dot { width: 30px; height: 44px; border: 0; background: none; display: grid; place-items: center; padding: 0; }
+.dealer-dot::before { content: ""; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px var(--line-strong); }
+.dealer-dot.on::before { background: var(--ink); box-shadow: inset 0 0 0 4px var(--ink), inset 0 0 0 6px var(--bg); }
+/* The reveal holds the stage: through the drumroll and for a moment after the flip the bids are big */
+.bids-strip.stage .bid-cell { padding-block: 12px 9px; transition: padding .4s var(--ease); }
+.bids-strip.stage .bid-cell b { font-size: 2.5rem; transition: font-size .4s var(--ease); }
+body.fit .play-card .bids-strip.stage .bid-cell b { font-size: 2.2rem; }
+body.fit .play-card .bids-strip.wide.stage .bid-cell b { font-size: 1.8rem; }
+@media (prefers-reduced-motion: reduce) { .bids-strip.stage .bid-cell, .bids-strip.stage .bid-cell b { transition: none; } }
+.bids-strip.settle .bid-cell b { animation: settle .5s var(--ease) both; }
+@keyframes settle { from { font-size: 2.3rem; } }
+@media (prefers-reduced-motion: reduce) { .bids-strip.settle .bid-cell b { animation: none; } }
+.scores td .miss { background: repeating-linear-gradient(-45deg, var(--hatch) 0 4px, transparent 4px 8px); }
+/* Fix a bid sits centred under the full-width Round over */
+.link.centred { display: flex; margin: 2px auto 0; }
+/* Table screen: role badges read from across the room */
+body.table .badge { font-size: 1rem; padding: 2px 8px; }
+/* A player still on a flag sits in a tile like everyone with a character */
+.prow > svg.flag { width: 34px; height: 34px; padding: 9px 5px; box-sizing: border-box; border-radius: 10px; background: var(--tint); box-shadow: none; }
+body.table .prow > svg.flag { width: 44px; height: 44px; padding: 12px 7px; }

@@ -51,6 +51,11 @@ async function firebaseStore() {
     setIfMissing(code, path, value) {
       return db.runTransaction(gref(code, path), cur => (cur === null ? value : undefined)).catch(() => {});
     },
+    // Like setIfMissing, but says whether this phone's write is the one that landed.
+    async createIfMissing(code, path, value) {
+      try { return (await db.runTransaction(gref(code, path), cur => (cur === null ? value : undefined))).committed; }
+      catch { return false; }
+    },
     // Mark this device as holding a seat; Firebase clears it if the phone drops off.
     async claim(code, pid, device) {
       const r = gref(code, `presence/${pid}`);
@@ -114,6 +119,11 @@ function localStore() {
     async update(code, patch) { games.update(code, patch); },
     async setIfMissing(code, path, value) {
       write(code, g => { if (g[code] && path.split('/').reduce((o, k) => o?.[k], g[code]) == null) setPath(g[code], path, value); });
+    },
+    async createIfMissing(code, path, value) {
+      let ok = false;
+      write(code, g => { if (g[code] && path.split('/').reduce((o, k) => o?.[k], g[code]) == null) { setPath(g[code], path, value); ok = true; } });
+      return ok;
     },
     async claim(code, pid, device) {
       await store.update(code, { [`presence/${pid}`]: device });
