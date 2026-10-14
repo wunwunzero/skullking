@@ -139,7 +139,7 @@ body.table #top { padding-inline: max(var(--pad), calc((100% - 1100px) / 2 + var
 .card.quiet { background: var(--tint); border-color: transparent; }
 .section-h { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; margin: 22px 2px 8px; }
 .section-h h3 { margin: 0; }
-.section-h span { font-size: .85rem; color: var(--ink-2); }
+.section-h span { font-size: .85rem; color: var(--ink-2); text-align: right; }
 
 /* ---------- buttons ---------- */
 .btn {
@@ -841,7 +841,7 @@ p, .note { text-wrap: pretty; }
 .scores.many td small { font-size: .75rem; }
 .scores.many td.rn, .scores.many th:first-child { font-size: .75rem; }
 /* TV table screen: one grid, readable across the room */
-body.table .tv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 18px 0 12px; font-size: 1.35rem; color: var(--ink-2); }
+body.table .tv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 18px 0 12px; font-size: 1.6rem; color: var(--ink-2); }
 body.table .tv-head p { margin: 0; }
 body.table .tv-head .verdict { font-size: 1.2rem; color: var(--ink); }
 .tv-grid { width: 100%; border-collapse: collapse; background: var(--surface); border: var(--hair) solid var(--line); border-radius: var(--radius); overflow: hidden; }
@@ -915,9 +915,9 @@ body.table .tv-head { margin: 10px 0 8px; font-size: 1.2rem; }
 .prow .who > b .nm { flex: 0 1 auto; min-width: 3.2em; }
 .prow .who > .roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .875rem; color: var(--ink-2); margin-top: 2px; }
 .prow .who > .roles .badge { font-size: .75rem; }
-.you-tag { flex: none; font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--magenta); border: var(--hair) solid currentColor; border-radius: 999px; padding: 0 6px; line-height: 1.5; }
+.you-tag { flex: none; font-size: .75rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--magenta); border: var(--hair) solid currentColor; border-radius: 999px; padding: 0 6px; line-height: 1.5; }
 .src { white-space: nowrap; }
-.src.editing { color: var(--magenta); font-style: italic; }
+.editing-note { display: block; font-size: .8rem; font-style: italic; color: var(--ink-2); }
 .bonus-done { margin-top: 10px; }
 /* Toasts float above the bottom dock */
 .toast { bottom: calc(20px + var(--dock-h, 0px) + env(safe-area-inset-bottom)); }
@@ -1125,4 +1125,21 @@ body.fit .stuck { margin: 8px 2px 0; }
 }
 /* Fixed layout with the round card up: a little less air around it so the crew list keeps its rows */
 body.fit main > .card.scored { margin: 8px 0 4px; }
-body.fit main > .link[data-act=undo] { min-height: 36px; }
+
+/* Round card on the bid screen: one slim line, tap for the whole round */
+.card.scored.slim { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; color: inherit; cursor: pointer; padding: 12px 14px; }
+.card.scored.slim .crownmark { width: 24px; height: 24px; flex: none; color: var(--ink-2); }
+.card.scored.slim.nailed .crownmark { color: var(--brass); }
+.card.scored.slim .what { font-weight: 750; line-height: 1.25; min-width: 0; }
+.card.scored.slim .what small { display: block; font-weight: 500; font-size: .82rem; color: var(--ink-2); }
+.card.scored.slim .big { margin-left: auto; font-size: 1.7rem; font-weight: 800; font-style: italic; letter-spacing: -.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+.card.scored.slim.nailed .big { color: var(--brass); }
+.card.scored.slim.missed .big { color: var(--bad); }
+.card.scored.slim .chev { width: 16px; height: 16px; flex: none; color: var(--ink-3); }
+.card.scored.slim:active { transform: scale(.99); }
+/* Standings strip: fade the edge while more pills hide past it */
+.standings-strip.more { -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 36px), transparent); }
+/* Drumroll: the trick button waits quietly instead of looking broken */
+.counter .btn.plus.drumming:disabled { background: var(--tint); color: var(--ink-2); border-color: transparent; opacity: 1; font-style: italic; }
+/* Table screen: the join code reads from across the room */
+body.table #top .code-chip { font-size: 1.15rem; padding: 6px 14px; }

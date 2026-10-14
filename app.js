@@ -399,6 +399,14 @@ function afterRender() {
       m.style.setProperty('--x', to.x); m.style.setProperty('--lane', to.lane);
     }
   });
+  // The standings strip scrolls sideways at big tables: show your own pill, and fade the edge
+  // while more pills hide past it.
+  const strip = document.querySelector('.standings-strip');
+  if (strip) {
+    const mine = strip.querySelector('.me'), fade = () => strip.classList.toggle('more', strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2);
+    if (mine && mine.offsetLeft + mine.offsetWidth > strip.clientWidth) strip.scrollLeft = mine.offsetLeft - 24;
+    fade(); strip.onscroll = fade;
+  }
   const c = document.querySelector('[data-count]');
   if (c && S.counted !== c.dataset.key) {
     S.counted = c.dataset.key;
@@ -745,11 +753,31 @@ function standingsStrip(g) {
 }
 
 // Round-scored card: your result first (the "nailed it" moment), then everyone's round.
-function lastRoundBanner(g) {
+// On a phone it is one slim line (tap for the whole round); the table screen shows it all.
+function lastRoundBanner(g, { full = false } = {}) {
   const r = g.round - 1;
-  // Each phone keeps its round card until it bids (a seat-less screen until anyone bids).
-  const nowBids = g.bids?.[g.round] || {}, seat = meIn(g, g.round);
-  if (r < 1 || g.phase !== 'bidding' || (seat ? nowBids[seat] != null : Object.keys(nowBids).length)) return '';
+  // Each phone keeps its round card until it first bids this round (taking the bid back with
+  // Change doesn't bring it back); a seat-less screen keeps it until anyone bids.
+  const nowBids = g.bids?.[g.round] || {}, seat = meIn(g, g.round), key = `${S.code}:${g.round}`;
+  if (seat && nowBids[seat] != null) (S.bannerDone ||= {})[key] = true;
+  if (r < 1 || g.phase !== 'bidding' || S.bannerDone?.[key] || (!seat && Object.keys(nowBids).length)) return '';
+  return full ? roundCard(g, r) : roundSlim(g, r);
+}
+function roundSlim(g, r) {
+  const tot = totals(g), mine = meIn(g, r);
+  if (!mine) {
+    const lead = ranking(g)[0];
+    return `<button class="card scored slim" data-act="round-detail" data-r="${r}">${icon('crown', 'crownmark')}<span class="what">${t('Round {r} scored', { r })}<small>${t('{name} is ahead with {n}.', { name: esc(lead.name), n: plain(lead.total) })}</small></span>${icon('lead', 'chev')}</button>`;
+  }
+  const myScore = tot[mine].rounds[r], myBid = g.bids?.[r]?.[mine], myTricks = g.results?.[r]?.[mine]?.tricks;
+  const nailed = myBid != null && myBid === myTricks;
+  const what = nailed ? t(myBid === 0 ? 'Zero bid nailed' : 'Bid nailed') : t('Missed by {n}', { n: Math.abs((myTricks ?? 0) - (myBid ?? 0)) });
+  return `<button class="card scored slim ${nailed ? 'nailed' : myScore < 0 || (g.scoring === 'rascal' && myScore === 0) ? 'missed' : ''}" data-act="round-detail" data-r="${r}" aria-label="${esc(`${what}, ${signed(myScore)}. ${t('Round {r}: everyone', { r })}`)}">
+    ${icon(nailed ? 'check' : 'down', 'crownmark')}<span class="what">${what}<small>${t('Round {r}', { r })} · ${t('Bid {b} · won {w}', { b: myBid ?? '–', w: myTricks ?? '–' })}</small></span>
+    <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span>${icon('lead', 'chev')}</button>`;
+}
+// The whole round: your outcome, everyone's points, the highlights.
+function roundCard(g, r) {
   const tot = totals(g), mine = meIn(g, r);
   const lines = roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero') && l.icon !== 'down');
   const myScore = mine ? tot[mine].rounds[r] : null;
@@ -764,8 +792,11 @@ function lastRoundBanner(g) {
   return `<div class="card scored ${mine ? (nailed ? 'nailed' : myScore < 0 || (g.scoring === 'rascal' && myScore === 0) ? 'missed' : '') : ''}">
     ${mine ? '' : `<h2 class="t3">${t('Round {r} scored', { r })}</h2>`}${outcome}
     ${rows ? `<div class="round-row">${mine ? `<span>${t('Round {r}', { r })}:</span>` : ''}${rows}</div>` : ''}
-    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}</div>
-  ${undoCard(g)}`;
+    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}</div>`;
+}
+function roundSheet(s) {
+  const g = S.game, u = lastUndo(g);
+  return `${roundCard(g, s.r)}${u && /^.?\s*Undo scoring round/.test(u.label) ? undoCard(g) : ''}`;
 }
 function undoCard(g) {
   const u = lastUndo(g);
@@ -798,7 +829,7 @@ function tvView(g) {
   const head = g.phase === 'bidding' ? (waiting.length ? t('Waiting for {names}', { names: waiting.map(p => esc(p.name)).join(', ') }) : t('Revealing'))
     : g.phase === 'playing' ? `${t('Tricks played')} <b class="sounding">${played}</b> / ${r} · ${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}`
     : ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0) !== tricksInRound(g, r) ? t("Tricks don't add up: check the numbers")
-    : ps.some(p => isEditing(g, p.id)) ? tn(ps.filter(p => isEditing(g, p.id)).length, '{names} is adding bonuses…', '{names} are adding bonuses…', { names: namesList(ps.filter(p => isEditing(g, p.id))) })
+    : ps.some(p => isEditing(g, p.id)) ? tn(ps.filter(p => isEditing(g, p.id)).length, '{names} is still editing…', '{names} are still editing…', { names: namesList(ps.filter(p => isEditing(g, p.id))) })
     : t('Tricks add up');
   // The reveal, big: bids sit face down through the drumroll, then flip row by row.
   const drum = g.phase === 'playing' && S.drumUntil > Date.now();
@@ -813,7 +844,7 @@ function tvView(g) {
     </div>
     ${flip && hint ? `<p class="verdict tv-verdict">${icon(hint.icon)}<span>${esc(hint.text)}</span></p>` : ''}`;
   }
-  return `${tvSoundBar()}${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
+  return `${tvSoundBar()}${g.phase === 'bidding' ? lastRoundBanner(g, { full: true }) : ''}
   ${standingsLine(g, { full: true })}
   <div class="tv-head"><p>${head}</p>${hint ? `<p class="verdict">${icon(hint.icon, 'sm')}<span>${esc(hint.text)}</span></p>` : ''}</div>
   <table class="tv-grid ${drum ? 'drum' : flip ? 'flip' : ''}" style="--rows:${ps.length}"><thead><tr><th>${t('Players')}</th><th>${t('Bid')}</th><th>${t(g.phase === 'results' ? 'won' : 'Tricks')}</th>${g.phase === 'results' ? `<th>${t('This round')}</th>` : ''}<th>${t('Total')}</th></tr></thead><tbody>
@@ -860,7 +891,7 @@ function biddingView(g) {
   </div>`;
   const banner = lastRoundBanner(g);
   return `
-  ${banner && fitMode() ? standingsStrip(g) : standingsLine(g, { full: !!banner })}
+  ${banner ? standingsStrip(g) : standingsLine(g)}
   ${banner}
   ${card}
   <div class="section-h"><h2 class="t3">${mine && bids[mine] == null ? (waiting === 1 ? t('Waiting for you') : tn(waiting - 1, 'Waiting for you and {n} more', 'Waiting for you and {n} more')) : !waiting ? t('Revealing') : waiting <= 3 ? t('Waiting for {names}', { names: namesList(ps.filter(p => bids[p.id] == null)) }) : t('Waiting for {n}', { n: waiting })}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
@@ -945,7 +976,7 @@ function playingView(g) {
       <b>${myGot}<span> ${t('of')} ${myBid ?? '–'}</span></b></div>
     <div class="counter">
       <button class="btn minus" data-act="live" data-d="-1" ${myGot <= 0 ? 'disabled' : ''} aria-label="${t('Remove a trick')}">${icon('minus')}</button>
-      <button class="btn primary plus" data-act="live" data-d="1" ${done || drum ? 'disabled' : ''}>${icon('plus')}${S.actingFor ? t('{name} won a trick', { name: esc(name(mine)) }) : t('I won a trick')}</button>
+      <button class="btn primary plus ${drum ? 'drumming' : ''}" data-act="live" data-d="1" ${done || drum ? 'disabled' : ''}>${drum ? t('Revealing') : `${icon('plus')}${S.actingFor ? t('{name} won a trick', { name: esc(name(mine)) }) : t('I won a trick')}`}</button>
     </div>
     ${canDestroy && me() === dealerFor(g, r) ? `<button class="btn destroyed-btn" data-act="destroy" data-d="1" ${done || drum || destroyed >= 2 ? 'disabled' : ''}>${icon('kraken', 'sm')}${t('Trick destroyed')}${destroyed ? ` <span class="chip">${destroyed}</span>` : ''}</button>
       ${destroyed ? `<button class="link" data-act="destroy" data-d="-1">${t('Undo a destroyed trick')}</button>` : ''}` : ''}` : ''}
@@ -1026,7 +1057,7 @@ function resultForm(g, r, pid) {
     ${stepper('draft', 'tricks', t('Tricks won'), `${t('Bid')} ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
     ${!keys.length ? '' : open ? keys.map(k => bonusStepper('draft', k, d[k] || 0, true)).join('')
       : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${keys.length === 1 && keys[0] === 'loot' ? t('Add Loot alliances') : t('Add bonuses (14s, Pirates, Mermaids, Skull King)')}</span></button>`}
-    ${open && keys.length && S.editMarked && g.editing?.[pid] ? `<button class="btn mini bonus-done" data-act="bonus-done">${icon('check', 'sm')}${t('Done adding bonuses')}</button>` : ''}
+    ${S.editMarked && g.editing?.[pid] ? `<button class="btn mini bonus-done" data-act="bonus-done">${icon('check', 'sm')}${t('Done, ready to score')}</button>` : ''}
     ${open && keys.length && !made ? `<p class="small muted" style="margin:4px 0 0">${t(g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.')}</p>` : ''}
     <div class="preview"><span class="muted">${t('This round')}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
     <p class="small muted saved-note">${icon('check', 'sm')}${t('Saved as you go. You can change it until the round is scored.')}</p>`;
@@ -1034,7 +1065,7 @@ function resultForm(g, r, pid) {
 const bonusStepper = (act, k, val, hint) =>
   stepper(act, k, `${esc(t(BONUS[k].label))} <span class="muted small">+${BONUS[k].pts}</span>`, hint ? esc(t(BONUS[k].hint)) : '', val, BONUS[k].max);
 
-// Who's in the middle of adding bonuses (on another phone): a timestamp each phone refreshes
+// Who's in the middle of changing their round (on another phone): a timestamp each phone refreshes
 // while it edits, so Score can wait for them. Stale 15 s after their last bonus tap.
 function isEditing(g, pid) { return g.phase === 'results' && Date.now() - (g.editing?.[pid] || 0) < 15000; }
 function editorsElsewhere(g, r) {
@@ -1067,7 +1098,7 @@ function resultsView(g) {
   const editors = editorsElsewhere(g, r);
   const ready = sum === n && !editors.length;
   const status = sum !== n ? t("Tricks don't add up: check the numbers")
-    : editors.length ? tn(editors.length, '{names} is adding bonuses…', '{names} are adding bonuses…', { names: namesList(editors) })
+    : editors.length ? tn(editors.length, '{names} is still editing…', '{names} are still editing…', { names: namesList(editors) })
     : t('Tricks add up · add any bonuses, then score');
   const srcLabel = e => !e ? `<span class="src">${t('waiting')}</span>` : e.src === 'auto' ? `<span class="src">${t('auto-filled')}</span>` : '';
   return `
@@ -1078,7 +1109,7 @@ function resultsView(g) {
       const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? scoreFor(g, r, p.id, e) : null;
       const made = e && bid === e.tricks;
       return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}${editors.some(x => x.id === p.id) ? ` · <span class="src editing">${t('adding bonuses…')}</span>` : ''}</span></div>
+        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}</span>${editors.some(x => x.id === p.id) ? `<span class="editing-note">${t('still editing…')}</span>` : ''}</div>
         ${e ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : ''}
         <span class="total">${plain(tot[p.id].total + (s || 0))}</span></div>`;
     }).join('')}${tableFill(ps.length)}
@@ -1185,8 +1216,8 @@ function renderSheet() {
     S.opener = null; S.openerKey = null;
     return;
   }
-  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, ask: askSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
-  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew'), ask: S.ask?.title || '' }[s.kind];
+  const body = { scores: scoresSheet, menu: menuSheet, rules: rulesSheet, edit: editSheetWrapper, actfor: actForSheet, share: shareSheet, bidpick: bidPickSheet, roster: rosterSheet, cheat: cheatSheet, member: memberSheet, pastgame: pastGameSheet, ask: askSheet, round: roundSheet, crewshare: crewShareSheet, newcrew: newCrewSheet }[s.kind]?.(s) || '';
+  const title = { scores: t('Scores'), menu: t('Menu'), rules: t('Rules & scoring'), edit: s.bidOnly ? t('Fix a bid') : t('Edit round {r}', { r: s.r }), actfor: t('Enter for…'), share: t('Game {code}', { code: S.code }), bidpick: t('Fix whose bid?'), roster: t('Players'), cheat: t('What beats what'), member: t('Player stats'), pastgame: s.code ? fmtDate(S.crew?.games?.[s.code]?.at) : '', crewshare: S.crew?.name || '', newcrew: t('Start a crew'), ask: S.ask?.title || '', round: t('Round {r}', { r: s.r }) }[s.kind];
   const opening = $sheet.hidden;
   if (opening) { S.opener = document.activeElement; S.openerKey = focusKey(); $toast.classList.remove('on'); }
   $sheet.hidden = false;
@@ -1264,15 +1295,19 @@ function menuSheet() {
 }
 
 // ---------- confirmations: a themed sheet instead of the browser's confirm() ----------
-function ask(title, body, yes) {
+// With { wait }, the safe choice (closing) is the primary button and `yes` steps back.
+function ask(title, body, yes, { wait } = {}) {
   S.ask?.res(false);
-  return new Promise(res => { S.ask = { title, body, yes, res }; S.sheet = { kind: 'ask' }; renderSheet(); });
+  return new Promise(res => { S.ask = { title, body, yes, wait, res }; S.sheet = { kind: 'ask' }; renderSheet(); });
 }
 function askSheet() {
   const a = S.ask;
-  return a ? `<p style="margin-top:0">${esc(a.body)}</p>
-    <button class="btn primary" data-act="ask-yes">${esc(a.yes)}</button>
-    <button class="btn ghost" data-act="close">${t('Cancel')}</button>` : '';
+  if (!a) return '';
+  return `<p style="margin-top:0">${esc(a.body)}</p>
+    ${a.wait ? `<button class="btn primary" data-act="close">${esc(a.wait)}</button>
+    <button class="btn" data-act="ask-yes">${esc(a.yes)}</button>`
+    : `<button class="btn primary" data-act="ask-yes">${esc(a.yes)}</button>
+    <button class="btn ghost" data-act="close">${t('Cancel')}</button>`}`;
 }
 
 // ---------- crews: a friend group's shared history ----------
@@ -1793,6 +1828,7 @@ const actions = {
     toast(t('Removed'));
   },
   cheat() { S.sheet = { kind: 'cheat' }; renderSheet(); },
+  'round-detail'(el) { S.sheet = { kind: 'round', r: +el.dataset.r }; renderSheet(); },
   roster() { S.sheet = { kind: 'roster' }; renderSheet(); },
   'rm-player'(el) { removePlayer(el.dataset.id); },
   'keep-player'(el) { update({ [`players/${el.dataset.id}/left`]: null }); },
@@ -1930,7 +1966,7 @@ const actions = {
   },
   'fix-bids'() { S.sheet = { kind: 'bidpick' }; renderSheet(); },
   'open-bonus'() { S.bonusOpen[`${S.game.round}:${me()}`] = true; markEditing(); render(); },
-  'bonus-done'() { markEditing(false); render(); toast(t('Bonuses saved')); },
+  'bonus-done'() { markEditing(false); render(); toast(t('Saved')); },
   // Your round saves itself as you change it: no lock-in tap, and nothing is held back on a
   // phone when someone else scores.
   draft(el) {
@@ -1941,7 +1977,7 @@ const actions = {
     const d = S.drafts[key] ||= { ...draftFor(g, r, who) };
     const k = el.dataset.k, max = k === 'tricks' ? tricksInRound(g, r) : BONUS[k].max;
     d[k] = Math.max(0, Math.min(max, (d[k] || 0) + +el.dataset.d));
-    if (k !== 'tricks') markEditing();
+    markEditing();
     const clean = { tricks: d.tricks || 0 };
     bonusKeys(g, clean.tricks).forEach(b => { if (d[b]) clean[b] = d[b]; });
     update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
@@ -1950,11 +1986,20 @@ const actions = {
   async score(asked) {
     const g = S.game, r = g.round, eff = effectiveResults(g, r), patch = {};
     if (S.game.phase !== 'results' || S.game.round !== r) return;
-    const editors = asked === true ? [] : editorsElsewhere(g, r);
-    if (editors.length) {
-      const ok = await ask(t('Score now?'), tn(editors.length, '{names} is still adding bonuses. Score anyway?', '{names} are still adding bonuses. Score anyway?', { names: namesList(editors) }), t('Score anyway'));
-      if (!ok || S.game.phase !== 'results' || S.game.round !== r) return;
-      return actions.score(true);
+    if (asked !== true) {
+      // Before scoring over someone, or over tricks that don't add up, ask; waiting is the easy choice.
+      const editors = editorsElsewhere(g, r), n = tricksInRound(g, r);
+      const sum = playersIn(g, r).reduce((a, p) => a + (eff[p.id]?.tricks || 0), 0);
+      const names = editors.map(p => p.name).join(', ');
+      const q = editors.length
+        ? [t('{names} is still editing', { names }), tn(editors.length, 'Anything {names} changes after you score won’t count. You can undo scoring.', 'Anything {names} change after you score won’t count. You can undo scoring.', { names }), tn(editors.length, 'Wait for {names}', 'Wait for {names}', { names })]
+        : sum !== n ? [t("Tricks don't add up"), `${tn(n, 'The tricks add up to {sum}, but {n} was won this round', 'The tricks add up to {sum}, but {n} were won this round', { sum })}. ${t('Whoever’s count is wrong gets the wrong score. You can undo scoring.')}`, t('Check the tricks')]
+        : null;
+      if (q) {
+        const ok = await ask(q[0], q[1], t('Score anyway'), { wait: q[2] });
+        if (!ok || S.game.phase !== 'results' || S.game.round !== r) return;
+        return actions.score(true);
+      }
     }
     // Anyone this phone hasn't heard from gets their live count saved, but only if nothing is
     // there yet: their own save (bonuses included) may still be on its way here.
@@ -1971,9 +2016,14 @@ const actions = {
     if (g.editing) S.store.update(S.code, { editing: null }).catch(() => {});
     toast(t('Round {r} scored', { r }), { label: t('Undo'), run: () => actions.undo() });
   },
-  undo() {
-    const u = lastUndo(S.game);
+  async undo() {
+    const u = lastUndo(S.game), g = S.game;
     if (!u) return;
+    const m = u.label.match(/Undo scoring round (\d+)$/);
+    if (m && g.phase === 'bidding' && Object.keys(g.bids?.[g.round] || {}).length) {
+      const ok = await ask(t('Undo scoring round {r}?', { r: m[1] }), t('Bids for round {n} have started. Every phone goes back to round {r} results.', { n: g.round, r: m[1] }), t('Undo scoring round {r}', { r: m[1] }));
+      if (!ok || lastUndo(S.game)?.key !== u.key) return;
+    }
     S.sheet = null;
     update({ phase: u.phase, round: u.round, ...(u.legacy ? { undo: null } : { [`history/${u.key}`]: null }) });
     toast(t('Undone'));
