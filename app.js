@@ -268,6 +268,11 @@ function onGame(g) {
     }
     maybeReveal(g);
     maybeResults(prev, g);
+    // If another phone changed this player's saved round (entering for them), their copy wins.
+    for (const key of Object.keys(S.drafts)) {
+      const [r, pid] = key.split(':'), saved = g.results?.[r]?.[pid], mineNow = JSON.stringify(S.drafts[key]);
+      if (saved && JSON.stringify(saved) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== JSON.stringify(saved)) delete S.drafts[key];
+    }
   }
   render();
 }
@@ -1857,14 +1862,17 @@ const actions = {
   // Your round saves itself as you change it: no lock-in tap, and nothing is held back on a
   // phone when someone else scores.
   draft(el) {
-    const g = S.game, r = g.round, who = me();
+    const g = S.game, r = g.round, who = me(), key = `${r}:${who}`;
     if (g.phase !== 'results' || !who) return;
-    const d = { ...draftFor(g, r, who) };
+    // Your own round lives in a local draft while you edit it, so two quick taps (or a sync
+    // arriving in between) never rebuild the save from a stale copy and lose the first tap.
+    const d = S.drafts[key] ||= { ...draftFor(g, r, who) };
     const k = el.dataset.k, max = k === 'tricks' ? tricksInRound(g, r) : BONUS[k].max;
     d[k] = Math.max(0, Math.min(max, (d[k] || 0) + +el.dataset.d));
     const clean = { tricks: d.tricks || 0 };
     bonusKeys(g).forEach(b => { if (d[b]) clean[b] = d[b]; });
     update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
+    render();
   },
   confirm() {
     const g = S.game, r = g.round, who = me(), key = `${r}:${who}`;
