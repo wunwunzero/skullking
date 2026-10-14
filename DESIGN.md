@@ -478,7 +478,13 @@ A crew page reached from a card at the top of the home screen ("Your crew", name
 - **Crew game setup:** members appear as tinted name chips (not inputs) with their tile; absent members sit above as pill buttons to add back; every row after the first has an up arrow to fix the seating.
 
 ### Lock In and Score
-Each player locks in their own round (tricks plus any bonuses) with the magenta "Lock in my round"; "No bonuses? Just tap Lock in." sits under it. The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
+Each player locks in their own round (tricks plus any bonuses) with the magenta "Lock in my round" in the results dock, under the thumb; the card above holds the steppers and says "Locked in" once done, and the dock then switches to Score. The last trick of the round takes every phone to results on its own (the dealer's phone drives it). The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
+
+### Ties on the Standings Line
+Players on the same score share one marker: their tiles overlap like a hand of cards (each later tile −9px with a surface-coloured ring) beside one sounding. A fresh game is one tag, not a stack of zeros. Ticks use a true minus.
+
+### Table Screen (TV)
+At 700px and wider the table screen is one dense grid instead of the phone layout: a head line (who we're waiting for, tricks played and who leads, or how many have locked in) with the bid-total verdict, then a hairline table of Players · Bid · Tricks · This round · Total. Names 1.6rem, numbers 2.1rem italic soundings, 44px tiles, the crew-colour wash on each row, brass crown on the leader's total. Eight players fit a 1280×800 screen.
 
 ### Confirm Sheet
 Destructive or seat-taking choices (remove a player, take over a seat, start a season, remove a game or crew) use the bottom sheet, not the browser's confirm(): the question as the title, one plain sentence of consequence, the primary button naming the action ("Remove", "Take over"), then a ghost Cancel. Cancelling returns to the sheet you came from.

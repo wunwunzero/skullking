@@ -239,6 +239,7 @@ function onGame(g) {
       if (nailed && g.phase !== 'done') { fanfare(); buzz([40, 50, 40, 50, 160]); }
       announce(`${t('Round {r} scored.', { r })}${mine ? ` ${t('You {n}.', { n: signed(tot[mine].rounds[r]) })}` : ''} ${t('{name} is ahead with {n}.', { name: lead.name, n: plain(lead.total) })}`);
     }
+    if (prev && prev.phase === 'playing' && g.phase === 'results' && prev.round === g.round) announce(t('Round {r} over: check your tricks and lock in.', { r: g.round }));
     S.finalAnim = !!(prev && prev.phase !== 'done' && g.phase === 'done');
     if (S.finalAnim) { chime(); buzz([80, 60, 80, 60, 240]); }
     S.lastPhaseKey = key;
@@ -316,7 +317,7 @@ function focusKey() {
 }
 
 function render() {
-  const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement);
+  const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   renderTop();
   if (!S.code && S.setup) { $app.innerHTML = setupView(); }
@@ -343,7 +344,13 @@ function render() {
   if (S.updateReady && calm) $app.insertAdjacentHTML('afterbegin', `<div class="update-bar" role="status"><span>${icon('refresh', 'sm')}${t('A new version is ready')}</span><button class="btn" data-act="reload-app">${t('Refresh')}</button></div>`);
   if (!sheetFocused) renderSheet();
   afterRender();
-  if (fk) { const el = document.querySelector(fk); if (el && !el.disabled) el.focus({ preventScroll: true }); }
+  const back = fk && document.querySelector(fk);
+  if (back && !back.disabled) back.focus({ preventScroll: true });
+  else if (hadFocus && !sheetFocused) {
+    // The control you were on is gone (new phase, locked in): land on what to do next.
+    const next = ['#app .card.action h2', '#app .dock .btn.primary', '#app .dock .btn', '#app h2'].map(s => document.querySelector(s)).find(Boolean);
+    if (next) { if (next.tagName === 'H2') next.tabIndex = -1; next.focus({ preventScroll: true }); }
+  }
 }
 
 // Glide Standings Line markers from their previous sounding, and count up the "nailed it" score.
@@ -403,14 +410,14 @@ function renderTop() {
   $top.hidden = false;
   const r = g.round;
   const sub = g.phase === 'lobby' ? t('Waiting to start') : g.phase === 'done' ? t('Game over')
-    : tn(r, '{n} card · {name} deals', '{n} cards · {name} deals', { name: esc(name(dealerFor(g, r))) });
+    : t('{name} deals', { name: esc(name(dealerFor(g, r))) });
   const inPlay = g.phase === 'bidding' || g.phase === 'playing' || g.phase === 'results';
   $top.innerHTML = `
     <h1 class="sr-only">${t('Skull King scorer')}${g.phase === 'lobby' || g.phase === 'done' ? '' : `, ${t('Round {r}', { r })}`}</h1>
     <button class="code-chip ${S.online ? '' : 'offline'}" data-act="share" aria-label="${t('Game {code}', { code: esc(S.code) })}${S.online ? '' : `, ${t('offline: changes will sync when you reconnect')}`}. ${t('Invite players')}"><span class="dot ${S.online ? '' : 'off'}" aria-hidden="true"></span>${esc(S.code)}${S.online ? '' : `<span class="off-label">${t('Offline')}</span>`}</button>
     <div class="round">${g.phase === 'lobby' || g.phase === 'done' ? `<b>${g.phase === 'done' ? t('Final scores') : t('Lobby')}</b>` : `<b>${t('Round {r}', { r })}<span> / ${ROUNDS}</span></b>`}<small>${sub}</small></div>
-    ${inPlay ? `<button class="icon-btn" data-act="cheat" aria-label="${t('What beats what')}">${icon('cards')}</button>` : ''}
-    <button class="icon-btn" data-act="scores" aria-label="${t('Scores table')}">${icon('chart')}</button>
+    ${inPlay ? `<button class="icon-btn" data-act="cheat" aria-label="${t('What beats what')}" title="${t('What beats what')}">${icon('cards')}</button>` : ''}
+    <button class="icon-btn" data-act="scores" aria-label="${t('Scores table')}" title="${t('Scores table')}">${icon('table')}</button>
     <button class="icon-btn" data-act="menu" aria-label="${t('Menu')}">${icon('more')}</button>`;
 }
 
@@ -451,20 +458,21 @@ function setupView() {
   const away = crewData ? Object.entries(crewData.members || {}).filter(([m]) => !members.includes(m)) : [];
   return `
   <h2>${t(crew ? 'Who’s playing tonight?' : "Who's playing?")}</h2>
-  <p class="muted small">${t('Seating order around the table. Mark who deals round 1.')}</p>
-  <form data-form="setup" role="radiogroup" aria-label="${t('Who deals first')}" style="margin-top:14px">
+  <p class="muted small">${t('Seating order around the table.')}</p>
+  <form data-form="setup" style="margin-top:14px">
     ${names.map((n, i) => `
       <div class="name-row">
         <span class="seatno">${i + 1}</span>
         ${members[i] && crewData?.members?.[members[i]] ? `<span class="member-name">${memberTile(crewData.members[members[i]])}<b>${esc(n)}</b></span>`
           : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${t(crew ? 'Guest name' : 'Player {n}', { n: i + 1 })}" autocomplete="off" data-idx="${i}">`}
         ${i > 0 ? `<button type="button" class="x" data-act="move-up" data-i="${i}" aria-label="${t('Move {name} up', { name: esc(n || t('Player {n}', { n: i + 1 })) })}">${icon('up-arrow')}</button>` : '<span class="x-space"></span>'}
-        <button type="button" role="radio" aria-checked="${dealer === i}" aria-label="${t('{name} deals first', { name: esc(n || t('Player {n}', { n: i + 1 })) })}" class="deal ${dealer === i ? 'on' : ''}" data-act="set-dealer" data-i="${i}">${dealer === i ? `${icon('check', 'xs')}${t('Deals')}` : `<span class="radio-dot" aria-hidden="true"></span><span class="deal-hint">${t('Deals')}</span>`}</button>
         ${names.length > 2 ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${n ? t('Remove {name}', { name: esc(n) }) : t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : ''}
       </div>`).join('')}
     ${names.length < 8 ? `<button type="button" class="btn ghost" data-act="add-name">${icon('plus')} ${t(crew ? 'Add a guest' : 'Add player')}</button>` : ''}
     ${crewData && away.length ? `<p class="muted small" style="margin:6px 2px 6px">${t('Also in the crew: tap to add')}</p>
       <div class="toggles away">${away.map(([m, x]) => `<button type="button" data-act="add-member" data-m="${m}">${memberTile(x)}${esc(x.name)}</button>`).join('')}</div>` : ''}
+    <label class="dealer-pick"><span>${t('Deals round 1')}</span>
+      <select data-setup="dealer">${names.map((n, i) => `<option value="${i}" ${dealer === i ? 'selected' : ''}>${esc(n || t('Player {n}', { n: i + 1 }))}</option>`).join('')}</select></label>
     <div class="section-h"><h2 class="t3">${t('House rules')}</h2></div>
     <div class="seg" role="radiogroup" aria-label="${t('Scoring')}">
       <button type="button" role="radio" aria-checked="${S.setup.scoring === 'classic'}" class="${S.setup.scoring === 'classic' ? 'on' : ''}" data-act="set-scoring" data-v="classic"><b>${t('Classic')}</b><span>${t('±20 per trick')}</span></button>
@@ -582,12 +590,13 @@ function lobbyView(g) {
   <div class="section-h"><h2 class="t3">${t('At the table')}</h2><span>${tn(ps.length, '{n} player', '{n} players')}</span></div>
   <div class="board">
     ${ps.map(p => `<div class="prow ${p.id === S.seat ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === dealerFor(g, 1) ? `<span class="badge">${t('deals first')}</span>` : ''}</b></div><span></span><span></span></div>`).join('')}
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === dealerFor(g, 1) ? `<span class="badge">${t('deals first')}</span>` : ''}</b></div>
+      ${g.presence?.[p.id] ? `<span class="chip good">${icon('phone')}${t('On a phone')}</span>` : `<span class="chip quiet-chip">${t('No phone yet')}</span>`}<span></span></div>`).join('')}
   </div>
   <button class="link" data-act="roster">${icon('users', 'sm')}<span>${t('Add or remove players')}</span></button>
   <p class="rules-line">${esc(rulesLine(g))}${g.crew && S.crew ? `<br>${t('Saved to {crew} when the game finishes.', { crew: esc(S.crew.name) })}` : ''}</p>
   <button class="btn ghost" data-act="rules">${icon('book')} ${esc(t('Rules & scoring'))}</button>
-  <div class="dock"><p class="status-line ${seated === ps.length ? 'ok' : ''}">${icon(seated === ps.length ? 'check' : 'phone', 'sm')}<span>${t('{n} of {m} phones joined', { n: seated, m: ps.length })}</span></p>
+  <div class="dock"><p class="status-line ${seated === ps.length ? 'ok' : ''}">${icon(seated === ps.length ? 'check' : 'phone', 'sm')}<span>${t('{n} of {m} phones joined', { n: seated, m: ps.length })}${seated < ps.length && ps.length - seated <= 3 ? ` · ${t('waiting on {names}', { names: ps.filter(p => !g.presence?.[p.id]).map(p => esc(p.name)).join(', ') })}` : ''}</span></p>
     <button class="btn primary" data-act="start">${t('Start round 1')}</button></div>`;
 }
 function shareButtons(url = '') {
@@ -622,15 +631,20 @@ function standingsLine(g, { full = false } = {}) {
   const top = Math.max(...vals), scored = g.round > 1 || g.phase === 'done';
   const showDelta = S.deltaUntil > Date.now() && S.deltaRound;
   const elapsed = showDelta ? 3400 - (S.deltaUntil - Date.now()) : 0;
-  // Stack markers on lanes so tags never overlap. On phones, cap at two lanes by
-  // dropping names from the tags (flag + sounding only) when the crew is crowded.
+  // Players on the same score share one marker (their characters stacked), so a fresh game
+  // is one tag, not a stack of zeros. Then stack markers on lanes so tags never overlap.
+  const groups = [];
+  for (const p of [...ps].sort((a, b) => tot[a.id].total - tot[b.id].total)) {
+    const v = tot[p.id].total, last = groups[groups.length - 1];
+    if (last && last.v === v) last.ps.push(p); else groups.push({ v, ps: [p] });
+  }
   const lay = gap => {
     const ends = [];
-    const placed = [...ps].sort((a, b) => tot[a.id].total - tot[b.id].total).map(p => {
-      const x = pos(tot[p.id].total);
-      let lane = ends.findIndex(end => x - end >= gap);
+    const placed = groups.map(gr => {
+      const x = pos(gr.v), w = gap + (gr.ps.length - 1) * 4;
+      let lane = ends.findIndex(end => x - end >= w);
       if (lane < 0) { lane = ends.length; ends.push(x); } else ends[lane] = x;
-      return { p, x, lane };
+      return { gr, x, lane };
     });
     return { placed, lanes: ends.length };
   };
@@ -640,17 +654,19 @@ function standingsLine(g, { full = false } = {}) {
   let compact = !full && S.seat !== 'watch', L = lay(compact ? gap / 2 : gap);
   if (!compact && L.lanes > 3 && S.seat !== 'watch') { compact = true; L = lay(gap / 2); }
   let ticks = '';
-  for (let v = lo; v <= hi; v += step) ticks += `<span class="tick ${v === 0 ? 'zero' : ''}" style="left:${pos(v)}%">${v}</span>`;
+  for (let v = lo; v <= hi; v += step) ticks += `<span class="tick ${v === 0 ? 'zero' : ''}" style="left:${pos(v)}%">${plain(v)}</span>`;
   // Depth bands: shoal water at the low end, open water toward the leader.
   const bands = [1, 2, 3].map(i => `<span class="band b${i}" style="left:${((i - 1) / 3) * 100}%" aria-hidden="true"></span>`).join('')
     + `<span class="water-label shoal" aria-hidden="true">${t('shallows')}</span><span class="water-label deep" aria-hidden="true">${t('deep water')}</span>`;
-  const markers = L.placed.map(({ p, x, lane }) => {
-    const lead = scored && tot[p.id].total === top && top > 0;
-    const d = showDelta ? tot[p.id].rounds[S.deltaRound] : null;
+  const markers = L.placed.map(({ gr, x, lane }) => {
+    const lead = scored && gr.v === top && top > 0, solo = gr.ps.length === 1, p = gr.ps[0];
+    const ds = showDelta ? [...new Set(gr.ps.map(q => tot[q.id].rounds[S.deltaRound]))] : [];
+    const d = ds.length === 1 && ds[0] != null ? ds[0] : null;
     const edge = x < 12 ? 'edge-l' : x > 88 ? 'edge-r' : '';
-    return `<div class="marker ${p.id === me() ? 'me' : ''} ${lead ? 'lead' : ''} ${edge}" data-id="${p.id}" style="--x:${x.toFixed(2)}%;--lane:${lane}">
+    const faces = solo ? flag(p.id) : `<span class="faces">${gr.ps.map(q => flag(q.id)).join('')}</span>`;
+    return `<div class="marker ${gr.ps.some(q => q.id === me()) ? 'me' : ''} ${lead ? 'lead' : ''} ${edge}" data-id="${p.id}" style="--x:${x.toFixed(2)}%;--lane:${lane}">
       <span class="stem"></span>
-      <span class="tag">${lead ? icon('crown', 'crown') : ''}${flag(p.id)}${compact ? '' : esc(p.name.slice(0, 8)) + ' '}<b>${plain(tot[p.id].total)}</b>
+      <span class="tag">${lead ? icon('crown', 'crown') : ''}${faces}${compact || !solo ? '' : `<span class="nm-cut">${esc(p.name)}</span> `}<b>${plain(gr.v)}</b>
         ${d != null ? `<span class="delta ${d >= 0 ? 'good-t' : 'bad-t'}" style="animation-delay:-${elapsed}ms">${signed(d)}</span>` : ''}</span></div>`;
   }).join('');
   return `<div class="standings ${compact ? 'compact' : ''}" role="img" aria-label="${t('Standings')}: ${esc(ranking(g).map(r => `${r.name} ${plain(r.total)}${scored && r.total === top && top > 0 ? ` (${t('in the lead')})` : ''}`).join(', '))}">
@@ -666,7 +682,7 @@ function lastRoundBanner(g) {
   const myScore = mine ? tot[mine].rounds[r] : null;
   const myBid = mine ? g.bids?.[r]?.[mine] : null, myTricks = mine ? g.results?.[r]?.[mine]?.tricks : null;
   const nailed = mine && myBid != null && myBid === myTricks;
-  const outcome = !mine ? '' : `<div class="outcome">${icon(nailed ? 'check' : 'target', 'crownmark')}
+  const outcome = !mine ? '' : `<div class="outcome">${icon(nailed ? 'check' : 'down', 'crownmark')}
       <div class="what">${nailed ? t(myBid === 0 ? 'Zero bid nailed' : 'Bid nailed') : t('Missed by {n}', { n: Math.abs((myTricks ?? 0) - (myBid ?? 0)) })}
         <small>${t('Bid {b} · won {w}', { b: myBid ?? '–', w: myTricks ?? '–' })}${g.cannon?.[r]?.[mine] ? ` · ${t('Cannonball')}` : ''}</small></div>
       <span class="big" data-count="${myScore}" data-key="${S.code}:${r}">${signed(myScore)}</span></div>`;
@@ -688,7 +704,35 @@ function undoLabel(u) {
   return m ? t('Undo scoring round {r}', { r: m[1] }) : t(s);
 }
 
+// The table screen on a TV or tablet: everything in one grid that reads from across the room.
+const tvMode = () => S.seat === 'watch' && !S.actingFor && innerWidth >= 700;
+function tvView(g) {
+  const r = g.round, ps = playersIn(g, r), bids = g.bids?.[r] || {}, live = g.live?.[r] || {}, tot = totals(g);
+  const eff = g.phase === 'results' ? effectiveResults(g, r) : {};
+  const revealed = g.phase !== 'bidding', played = tricksTapped(g, r);
+  const top = Math.max(...ps.map(p => tot[p.id].total)), scored = r > 1;
+  const waiting = ps.filter(p => bids[p.id] == null);
+  const head = g.phase === 'bidding' ? (waiting.length ? t('Waiting for {names}', { names: waiting.map(p => esc(p.name)).join(', ') }) : t('Revealing'))
+    : g.phase === 'playing' ? `${t('Tricks played')} <b class="sounding">${played}</b> / ${r} · ${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}`
+    : t('{n} of {m} locked in', { n: ps.filter(p => eff[p.id]?.src === 'confirmed').length, m: ps.length });
+  const hint = revealed ? bidHint(g, r) : null;
+  return `${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
+  <div class="tv-head"><p>${head}</p>${hint ? `<p class="verdict">${icon(hint.icon, 'sm')}<span>${esc(hint.text)}</span></p>` : ''}</div>
+  <table class="tv-grid"><thead><tr><th>${t('Players')}</th><th>${t('Bid')}</th><th>${t(g.phase === 'results' ? 'won' : 'Tricks')}</th><th>${t('This round')}</th><th>${t('Total')}</th></tr></thead><tbody>
+  ${ps.map(p => {
+    const bid = bids[p.id], got = g.phase === 'results' ? eff[p.id]?.tricks : live[p.id] || 0, st = liveStatus(bid, got ?? 0);
+    const sc = g.phase === 'results' && eff[p.id] ? scoreFor(g, r, p.id, eff[p.id]) : null;
+    const lead = scored && tot[p.id].total === top && top > 0;
+    return `<tr style="--crew:${color(p.id)}"><td><span class="tv-who">${flag(p.id)}<b>${esc(p.name)}</b>${roleBadges(g, r, p.id)}</span></td>
+      <td class="num">${!revealed ? (bid != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : '<span class="muted">…</span>') : bid ?? '–'}</td>
+      <td class="num ${revealed && bid != null ? ({ on: 'good-t', bust: 'bad-t', bust0: 'bad-t' }[st] || '') : ''}">${revealed ? (got ?? '–') : ''}</td>
+      <td class="num">${sc == null ? '' : `<span class="${sc >= 0 ? 'good-t' : 'bad-t'}">${signed(sc)}</span>`}</td>
+      <td class="num total">${lead ? icon('crown', 'crown') : ''}${plain(tot[p.id].total + (sc || 0))}</td></tr>`;
+  }).join('')}</tbody></table>`;
+}
+
 function biddingView(g) {
+  if (tvMode()) return tvView(g);
   const r = g.round, bids = g.bids?.[r] || {}, mine = meIn(g, r);
   const ps = playersIn(g, r);
   const waiting = ps.filter(p => bids[p.id] == null).length;
@@ -705,7 +749,7 @@ function biddingView(g) {
         <button class="btn" data-act="change-bid">${t('Change')}</button></div></div>`
     : `<div class="card action">
     <h2 class="t3">${S.actingFor ? t("{name}'s bid", { name: esc(name(mine)) }) : t('Your bid')} · ${tn(r, '{n} card', '{n} cards')}</h2>
-    <p class="muted small" style="margin:0">${teach} <button class="link inline" data-act="rules">${t('How scoring works')}</button> · <button class="link inline" data-act="cheat">${t('What beats what')}</button></p>
+    <p class="muted small" style="margin:0">${r <= 2 ? `${teach} ` : ''}<button class="link inline" data-act="rules">${t('How scoring works')}</button> · <button class="link inline" data-act="cheat">${t('What beats what')}</button></p>
     <div class="bid-grid" role="group" aria-label="${t('Your bid')}" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => `<button data-act="bid" data-n="${n}" class="${bids[mine] === n ? 'on' : ''}" aria-pressed="${bids[mine] === n}" aria-label="${tn(n, 'Bid {n} trick', 'Bid {n} tricks')}">${n}</button>`).join('')}</div>
     ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="${t('Rascal wager')}">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}${t('Grapeshot')}</b><span>${t('{n} pts · half if off by 1', { n: 10 * r })}</span></button>
@@ -754,7 +798,7 @@ function boardRows(g, r, { showLive }) {
     const chip = !showLive ? '' : {
       need: `<span class="chip">${t('{n} of {m}', { n: got, m: bid })}</span>`,
       on: `<span class="chip good">${icon('check')}${t('{n} of {m}', { n: got, m: bid })}</span>`,
-      bust: `<span class="chip bad">${icon('x')}${t('{n} of {m}', { n: got, m: bid })}</span>`,
+      bust: `<span class="chip bad">${icon('x')}${t('{n} won · bid {m}', { n: got, m: bid })}</span>`,
       safe0: `<span class="chip sk">${t('Zero bid · none won')}</span>`,
       bust0: `<span class="chip bad">${icon('x')}${t('Zero · {n} won', { n: got })}</span>`, none: '',
     }[st];
@@ -765,6 +809,7 @@ function boardRows(g, r, { showLive }) {
 }
 
 function playingView(g) {
+  if (tvMode()) return tvView(g);
   const r = g.round, live = g.live?.[r] || {}, bids = g.bids?.[r] || {}, mine = meIn(g, r), ps = playersIn(g, r);
   const destroyed = g.destroyed?.[r] || 0;
   const played = Object.values(live).reduce((a, b) => a + b, 0) + destroyed;
@@ -780,8 +825,8 @@ function playingView(g) {
   if (flip) S.flipPending = false;
   const strip = `<div class="bids-strip ${drum ? 'drum' : flip ? 'reveal' : ''}" style="--bcols:${ps.length <= 5 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
     ${ps.map((p, i) => drum
-      ? `<span class="bid-cell" style="--i:${i}" role="img" aria-label="${esc(p.name)}">${flag(p.id)}<b aria-hidden="true">?</b><small>${esc(p.name.slice(0, 7))}</small></span>`
-      : `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}" role="img" aria-label="${t('{name} bid {n}', { name: esc(p.name), n: bids[p.id] ?? '–' })}${g.cannon?.[r]?.[p.id] ? `, ${t('Cannonball')}` : ''}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name.slice(0, 7))}</small></span>`).join('')}
+      ? `<span class="bid-cell" style="--i:${i}" role="img" aria-label="${esc(p.name)}">${flag(p.id)}<b aria-hidden="true">?</b><small>${esc(p.name)}</small></span>`
+      : `<span class="bid-cell ${p.id === mine ? 'me' : ''}" style="--i:${i}" role="img" aria-label="${t('{name} bid {n}', { name: esc(p.name), n: bids[p.id] ?? '–' })}${g.cannon?.[r]?.[p.id] ? `, ${t('Cannonball')}` : ''}">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name)}</small></span>`).join('')}
   </div>`;
   return `
   ${standingsLine(g, { full: S.revealAnim })}
@@ -866,16 +911,16 @@ function resultForm(g, r, pid) {
   return `
     ${stepper('draft', 'tricks', t('Tricks won'), `${t('Bid')} ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
     ${open ? keys.map(k => bonusStepper('draft', k, d[k] || 0, true)).join('')
-      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${t('Add bonuses: 14s you captured, Pirates, Mermaids or the Skull King you caught')}${g.expansions?.loot ? `, ${t('Loot')}` : ''}</span></button>`}
+      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${t('Add bonuses (14s, Pirates, Mermaids, Skull King)')}</span></button>`}
     ${open && !made ? `<p class="small muted" style="margin:4px 0 0">${t(g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.')}</p>` : ''}
     <div class="preview"><span class="muted">${t('This round')}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
-    <button class="btn ${confirmed ? '' : 'primary'}" style="margin-top:12px" data-act="confirm" ${confirmed ? 'disabled' : ''}>${confirmed ? `${icon('check')}${t('Locked in')}` : t('Lock in my round')}</button>
-    ${confirmed ? '' : `<p class="small muted" style="margin:8px 2px 0">${t('No bonuses? Just tap Lock in.')}</p>`}`;
+    ${confirmed ? `<p class="locked-note">${icon('check', 'sm')}${t('Locked in')}</p>` : `<p class="small muted" style="margin:10px 2px 0">${t('No bonuses? Just tap Lock in below.')}</p>`}`;
 }
 const bonusStepper = (act, k, val, hint) =>
   stepper(act, k, `${esc(t(BONUS[k].label))} <span class="muted small">+${BONUS[k].pts}</span>`, hint ? esc(t(BONUS[k].hint)) : '', val, BONUS[k].max);
 
 function resultsView(g) {
+  if (tvMode()) return tvView(g);
   const r = g.round, mine = meIn(g, r), eff = effectiveResults(g, r), ps = playersIn(g, r);
   const n = tricksInRound(g, r), destroyed = g.destroyed?.[r] || 0;
   const allIn = ps.every(p => eff[p.id]);
@@ -888,7 +933,7 @@ function resultsView(g) {
   const unlocked = ps.filter(p => eff[p.id]?.src !== 'confirmed');
   const ready = allIn && sum === n && !unlocked.length;
   const counts = t('{n} of {m} locked in', { n: ps.length - unlocked.length, m: ps.length });
-  const status = myPending ? t('Lock in your round above')
+  const status = myPending ? t('Check your round above, then lock in')
     : !allIn ? `${t('{n} of {m} in', { n: inCount, m: ps.length })} · ${t('waiting on {names}', { names: ps.filter(p => !eff[p.id]).map(p => esc(p.name)).join(', ') })}`
     : unlocked.length ? `${counts} · ${t('waiting on {names}', { names: unlocked.map(p => esc(p.name)).join(', ') })}`
     : `${counts} · ${t(sum === n ? 'tricks add up' : "tricks don't add up")}`;
@@ -910,7 +955,8 @@ function resultsView(g) {
   ${(g.expansions?.kraken || g.expansions?.whale) && !watch && me() === dealerFor(g, r) ? destroyCard(destroyed, false) : ''}
   ${allIn && sum !== n ? `<div class="warnbox">${icon('x')}<span>${tn(n, 'The tricks add up to {sum}, but {n} was won this round', 'The tricks add up to {sum}, but {n} were won this round', { sum })}${destroyed ? ` (${t('{r} played, {d} destroyed', { r, d: destroyed })})` : ''}. ${t('Check the "won" numbers above; tap a player\'s chip in Scores to fix it later.')}</span></div>` : ''}
   ${watch ? '' : `<div class="dock"><p class="status-line ${ready ? 'ok' : ''}">${icon(ready ? 'check' : 'bell', 'sm')}<span>${status}</span></p>
-  <button class="btn ${ready ? 'primary' : ''}" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? t('Score anyway') : !ready ? t('Score now') : r === ROUNDS ? t('Score final round') : t('Score round {r}', { r })}</button></div>`}`;
+  ${myPending ? `<button class="btn primary" data-act="confirm">${S.actingFor ? t('Lock in for {name}', { name: esc(name(mine)) }) : t('Lock in my round')}</button>`
+    : `<button class="btn ${ready ? 'primary' : ''}" data-act="score" ${allIn ? '' : 'disabled'}>${allIn && sum !== n ? t('Score anyway') : !ready ? t('Score now') : r === ROUNDS ? t('Score final round') : t('Score round {r}', { r })}</button>`}</div>`}`;
 }
 
 // ---------- done ----------
@@ -1019,7 +1065,7 @@ function scoresSheet() {
       if (r > lastEditable) return `<td class="muted">${r === g.round && bid != null && g.phase !== 'bidding' ? `<small>${t('Bid')} ${bid}</small>` : ''}</td>`;
       const s = tot[p.id].rounds[r];
       if (S.readOnlyTable) return `<td><span class="ro"><b class="${s >= 0 ? 'good-t' : 'bad-t'}">${signed(s)}</b><small>${bid ?? '–'}/${res?.tricks ?? '–'}</small></span></td>`;
-      return `<td><button data-act="edit" data-r="${r}" data-id="${p.id}" aria-label="${t('Edit {name} round {r}', { name: esc(p.name), r })}"><b class="${s >= 0 ? 'good-t' : 'bad-t'}">${signed(s)}</b><small>${bid ?? '–'}/${res?.tricks ?? '–'}</small></button></td>`;
+      return `<td><button data-act="edit" data-r="${r}" data-id="${p.id}" aria-label="${t('{name}, round {r}: {s}, bid {b} won {w}. Edit', { name: esc(p.name), r, s: signed(s), b: bid ?? '–', w: res?.tricks ?? '–' })}"><b class="${s >= 0 ? 'good-t' : 'bad-t'}">${signed(s)}</b><small>${bid ?? '–'}/${res?.tricks ?? '–'}</small></button></td>`;
     }).join('')}</tr>`;
   }
   return `<p class="small muted" style="margin-top:0">${t(S.readOnlyTable ? 'Cells show score and bid/won.' : 'Cells show score and bid/won. Tap a scored round to fix it.')}</p>
@@ -1244,7 +1290,8 @@ function seasonChart(c, season) {
   // Lift end markers apart when lines finish on the same number.
   const ends = spreadEnds(ids.map(m => ({ m, y: y(lines[m][n]) - 7 })), 15, T - 6, H - B - 8);
   const paths = ids.map((m, i) => {
-    const pts = lines[m].map((v, j) => `${x(j).toFixed(1)},${(y(v) + (i - (ids.length - 1) / 2) * 1.6).toFixed(1)}`).join(' ');
+    const off = (i - (ids.length - 1) / 2) * 1.6, L2 = lines[m];
+    const pts = L2.map((v, j) => j ? `${x(j).toFixed(1)},${(y(L2[j - 1]) + off).toFixed(1)} ${x(j).toFixed(1)},${(y(v) + off).toFixed(1)}` : `${x(0).toFixed(1)},${(y(v) + off).toFixed(1)}`).join(' ');
     const a = c.members?.[m]?.avatar, ey = ends.find(e => e.m === m).y, ex = x(n) + 4;
     const mark = CREW[a] ? `<svg x="${ex}" y="${ey}" width="14" height="14" viewBox="0 0 16 16" shape-rendering="crispEdges">${spriteRects(a)}</svg>`
       : `<circle cx="${ex + 7}" cy="${ey + 7}" r="7" fill="${colr(m, i)}"/><text x="${ex + 7}" y="${ey + 11}" text-anchor="middle" class="ini">${esc(mname(m).slice(0, 1).toUpperCase())}</text>`;
@@ -1432,6 +1479,11 @@ function rulesSheet() {
     "White Whale: special cards lose their power; the highest number wins, any suit. If only special cards were played, the trick is destroyed and the Whale's player leads.",
     'If both the Kraken and the White Whale land in one trick, the second one played counts.',
     "Loot: plays like an Escape. Whoever wins the trick forms an alliance with the Loot's player: if both make their bids, each gets +20.",
+  ])}</ul>
+  <h2 class="t3">${t('Reading the board')}</h2>
+  <ul>${items([
+    'The Standings Line is a sea chart: further right, into deep water, means a higher score.',
+    'A crown marks the leader. Players on the same score share one marker.',
   ])}</ul>
   <h2 class="t3">${t('Rounds')}</h2>
   <p class="muted" style="margin-top:0">${t('10 rounds; round N deals N cards. The deal passes left each round. House rule: the player after the dealer leads every trick of the round.')}</p>
@@ -1630,6 +1682,7 @@ const actions = {
     const g = S.game, r = g.round, who = me();
     const cur = g.live?.[r]?.[who] || 0, next = Math.max(0, Math.min(r, cur + +el.dataset.d));
     update({ [`live/${r}/${who}`]: next });
+    announce(t('Tricks: {n} of {m}', { n: next, m: g.bids?.[r]?.[who] ?? '–' }));
     buzz(15);
   },
   'to-results'() {
@@ -1790,6 +1843,16 @@ document.addEventListener('keydown', e => {
     else if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
+});
+
+document.addEventListener('change', e => {
+  if (e.target.matches?.('select[data-setup=dealer]')) { syncSetupInputs(); S.setup.dealer = +e.target.value; }
+});
+document.addEventListener('input', e => {
+  const i = e.target.dataset?.idx;
+  if (i == null) return;
+  const opt = document.querySelector(`select[data-setup=dealer] option[value="${i}"]`);
+  if (opt) opt.textContent = e.target.value || t('Player {n}', { n: +i + 1 });
 });
 
 document.addEventListener('submit', async e => {

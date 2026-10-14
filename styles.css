@@ -818,3 +818,38 @@ p, .note { text-wrap: pretty; }
 .scores.many td button, .scores.many .ro { min-width: 0; width: 100%; padding: 4px 0; font-size: .82rem; }
 .scores.many td small { font-size: .68rem; }
 .scores.many tfoot td { font-size: .86rem; }
+
+/* ---------- critique #5 ---------- */
+/* Tied players share one Standings Line marker: their characters overlap like a hand of cards. */
+.marker .tag .faces { display: inline-flex; }
+.marker .tag .faces > * + * { margin-left: -9px; box-shadow: 0 0 0 1.5px var(--surface); }
+.marker .tag .nm-cut { max-width: 7em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.marker .tag .nm-cut { display: inline-block; vertical-align: bottom; }
+/* Setup: one dealer picker under the list, so each row is name + move + remove */
+.dealer-pick { display: grid; gap: 6px; margin: 14px 2px 0; font-size: .875rem; color: var(--ink-2); font-weight: 600; }
+/* Lobby: who is on a phone */
+.chip.quiet-chip { background: transparent; border-color: var(--line); color: var(--ink-3); font-weight: 600; }
+.board .prow > .chip { justify-self: end; }
+/* Results: your round card says when you're in; the button lives in the dock */
+.locked-note { display: flex; align-items: center; gap: 6px; margin: 12px 2px 0; font-weight: 700; color: var(--good); }
+/* 8-column score table at the 12px floor */
+.scores.many th { font-size: .75rem; }
+.scores.many td small { font-size: .75rem; }
+.scores.many td.rn, .scores.many th:first-child { font-size: .75rem; }
+/* TV table screen: one grid, readable across the room */
+body.table .tv-head { display: flex; justify-content: space-between; align-items: baseline; gap: 24px; margin: 18px 0 12px; font-size: 1.35rem; color: var(--ink-2); }
+body.table .tv-head p { margin: 0; }
+body.table .tv-head .verdict { font-size: 1.2rem; color: var(--ink); }
+.tv-grid { width: 100%; border-collapse: collapse; background: var(--surface); border: var(--hair) solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.tv-grid th { text-align: left; font-size: 1rem; font-weight: 650; color: var(--ink-2); padding: 12px 18px; border-bottom: var(--hair) solid var(--line-strong); }
+.tv-grid th:not(:first-child) { text-align: right; }
+.tv-grid td { padding: 10px 18px; border-bottom: var(--hair) solid var(--line);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--crew, transparent) 10%, transparent), transparent 40%); }
+.tv-grid tr:last-child td { border-bottom: 0; }
+.tv-grid .tv-who { display: flex; align-items: center; gap: 14px; }
+.tv-grid .tv-who b { font-size: 1.6rem; font-weight: 700; }
+.tv-grid .tv-who .ava { width: 44px; height: 44px; border-radius: 11px; }
+.tv-grid td.num { text-align: right; font-size: 2.1rem; font-weight: 800; font-style: italic; font-variant-numeric: tabular-nums; }
+.tv-grid td.num .chip { font-size: 1rem; font-style: normal; }
+.tv-grid td.total { color: var(--ink); }
+.tv-grid td.total .crown { width: 22px; height: 22px; color: var(--brass); margin-right: 6px; vertical-align: 2px; }

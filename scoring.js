@@ -175,7 +175,7 @@ export function roundHighlights(game, round, name) {
 
   for (const x of scores) {
     if (x.bid === 0 && x.res?.tricks === 0 && round >= 3) lines.push({ icon: 'target', id: x.id, kind: 'zero', text: t('{name} nailed a zero bid (+{n})', { name: name(x.id), n: x.s }) });
-    if (x.res?.skullKing && x.s > 0) lines.push({ icon: 'crown', text: t("{name}'s Mermaid sank the Skull King (+40)", { name: name(x.id) }) });
+    if (x.res?.skullKing && x.s > 0) lines.push({ icon: 'tail', text: t("{name}'s Mermaid sank the Skull King (+40)", { name: name(x.id) }) });
   }
   const top = [...scores].sort((a, b) => b.s - a.s);
   if (top[0] && top[0].s >= 40 && !(top[1] && top[1].s === top[0].s)) lines.push({ icon: 'up', text: t('Best round: {name} +{n}', { name: name(top[0].id), n: top[0].s }) });
@@ -234,12 +234,12 @@ const AWARDS = [
   { id: 'bounty', icon: 'loot', title: 'Bounty Hunter', min: 30, stat: s => s.bonus, line: s => t('+{n} in bonus cards', { n: s.bonus }) },
   { id: 'comeback', icon: 'up', title: 'Comeback Captain', min: 2, stat: s => s.climb, line: s => tn(s.climb, 'Climbed {n} place from the bottom', 'Climbed {n} places from the bottom') },
   { id: 'splash', icon: 'streak', title: 'Big Splash', min: 60, stat: s => s.best.score, line: s => t('+{n} in round {r}', { n: s.best.score, r: s.best.round }) },
-  { id: 'siren', icon: 'crown', title: 'Siren Song', min: 1, stat: s => s.sank, line: s => tn(s.sank, 'Sank the Skull King with a Mermaid', 'Sank the Skull King {n} times') },
+  { id: 'siren', icon: 'tail', title: 'Siren Song', min: 1, stat: s => s.sank, line: s => tn(s.sank, 'Sank the Skull King with a Mermaid', 'Sank the Skull King {n} times') },
   { id: 'streak', icon: 'streak', title: 'Hot Streak', min: 4, stat: s => s.run, line: s => t('{n} bids in a row', { n: s.run }) },
   { id: 'roller', icon: 'swords', title: 'High Roller', min: 1, stat: s => s.bids, line: s => t('Bid {n} tricks in all', { n: s.bids }) },
   { id: 'wreck', icon: 'down', title: 'Shipwrecked', min: 5, stat: s => s.missed, line: s => t('{n} bids missed', { n: s.missed }) },
   // More titles, so a big table still gets one each.
-  { id: 'early', icon: 'crown', title: 'Early Leader', min: 1, stat: s => s.ledEarly, line: () => t('Led the table after round 3') },
+  { id: 'early', icon: 'up', title: 'Early Leader', min: 1, stat: s => s.ledEarly, line: () => t('Led the table after round 3') },
   { id: 'late', icon: 'up', title: 'Late Bloomer', min: 60, stat: s => s.late, line: s => t('+{n} in the last three rounds', { n: s.late }) },
   { id: 'lucky', icon: 'spare', title: 'Lucky 14s', min: 2, stat: s => s.fourteens, line: s => t('{n} fourteens captured', { n: s.fourteens }) },
   { id: 'magnet', icon: 'target', title: 'Trick Magnet', min: 1, stat: s => s.tricks, line: s => t('{n} tricks won', { n: s.tricks }) },
