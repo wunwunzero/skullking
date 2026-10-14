@@ -974,6 +974,7 @@ body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 360px) / var(--r
 .standings-strip .crown { width: 14px; height: 14px; color: var(--brass); }
 /* Standings Line: the last tick stays inside the line */
 .standings .scale .tick:last-child { transform: translateX(-100%); }
+.standings .scale .tick:first-child { transform: none; }
 .standings .water-label { color: var(--ink-2); }
 /* TV: type scales with the screen; the crew wash runs once along the row */
 .tv-grid td { background: none; }
@@ -1009,11 +1010,21 @@ body.table .tv-head { font-size: clamp(1.2rem, 1.8vw, 2rem); }
 @keyframes tvflip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
 .tv-verdict { justify-content: center; font-size: clamp(1.4rem, 2.4vw, 2.2rem); margin-top: 12px; }
 /* TV finale: a wide board under the winner */
-.tv-finale { padding-top: 1vh; }
-.tv-finale .hero-flag .ava { width: 72px; height: 72px; border-radius: 16px; }
-.tv-finale h1 { font-size: clamp(2.2rem, 4vw, 3.4rem); margin-top: 6px; }
-.tv-finale .final-total { margin-top: 2px; }
-.tv-finale .final-total b { font-size: clamp(2.4rem, 4.5vw, 4rem); }
+body.table .winner.tv-finale { padding: 4px 2px 6px; }
+body.table main:has(.tv-finale) { padding-bottom: 12px; }
+/* The winner and the board share one screen: a compact hero, a shorter Standings Line, tight rows.
+   If a big table still can't fit, the board scrolls inside itself rather than hiding a player. */
+body.table .tv-finale ~ .tv-board { max-height: calc(100dvh - 330px); overflow: auto; }
+body.table .tv-finale ~ .tv-board .tv-grid tbody tr { height: auto; }
+.tv-finale .hero-flags { padding-top: 0; }
+/* Winner tile, name and total on one line: the TV has width to spare and no height */
+.tv-finale .hero-flags { display: inline-flex; vertical-align: middle; }
+.tv-finale .hero-flag { padding-top: 14px; }
+.tv-finale .hero-flag .ava { width: 48px; height: 48px; border-radius: 12px; }
+.tv-finale h1 { display: inline; font-size: clamp(1.8rem, 3.2vw, 2.6rem); margin: 0 0 0 14px; line-height: 1.05; vertical-align: middle; }
+.tv-finale .final-total { display: inline-grid; margin: 0 0 0 18px; vertical-align: middle; }
+.tv-finale .final-total b { font-size: clamp(2rem, 3.6vw, 3.2rem); }
+.tv-finale .final-total > :not(b) { display: none; }
 .tv-finale ~ .standings { margin: 6px 0; }
 .tv-finale ~ .tv-board .tv-grid td.num { font-size: clamp(1.5rem, 2.2vw, 2.4rem); }
 .tv-finale ~ .tv-board .tv-grid .tv-who b { font-size: clamp(1.2rem, 1.8vw, 1.8rem); }
@@ -1026,8 +1037,9 @@ body.table .tv-head { font-size: clamp(1.2rem, 1.8vw, 2rem); }
 .tv-grid td.award .ico { color: var(--ink-3); }
 /* The finale board shares the screen with the winner, so its rows stay compact */
 body.table .tv-finale ~ .tv-board .tv-grid tbody tr { height: auto; }
-body.table .tv-finale ~ .tv-board .tv-grid td { padding: 8px 18px; }
-body.table .tv-finale ~ .standings { --lane-h: 44px; --lane-n: 44; }
+body.table .tv-finale ~ .tv-board .tv-grid td { padding: 5px 18px; }
+body.table .tv-finale ~ .standings { --lane-h: 40px; --lane-n: 40; margin: 2px 0 6px; }
+body.table .tv-finale ~ .standings .lanes { padding-top: 12px; }
 
 /* Dealer: the Kraken / White Whale control sits with the trick counter */
 .destroyed-btn { margin-top: 10px; gap: 8px; }
@@ -1056,3 +1068,14 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--magenta); o
 .deal-line .ico { color: var(--ink-3); }
 .hl.extras li b { font-weight: 700; }
 .card.app-hint .btn.mini { margin-top: 0; }
+.ladder .suit { color: #fff; }
+.ladder .suit.yellow { color: #1d1404; }
+
+/* ---------- critique #8 ---------- */
+/* Trick chips are numbers: "2/3" with a ✓ or ×; no language can wrap them */
+.chip.num { white-space: nowrap; font-variant-numeric: tabular-nums; font-style: italic; font-weight: 750; gap: 3px; }
+.chip.num small { font-size: .78em; font-weight: 600; opacity: .75; }
+/* Give-a-trick chips look as tappable as they are */
+button.chip.give { min-height: 36px; padding-inline: 10px 8px; }
+.nowrap { white-space: nowrap; }
+:lang(zh) .prow, :lang(zh) .chip { word-break: keep-all; }

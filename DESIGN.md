@@ -478,7 +478,7 @@ A crew page reached from a card at the top of the home screen ("Your crew", name
 - **Crew game setup:** members appear as tinted name chips (not inputs) with their tile; absent members sit above as pill buttons to add back; every row after the first has an up arrow to fix the seating.
 
 ### Results and Score
-Nobody has to lock in: everyone's tapped tricks count, and your round card saves itself as you change tricks or add bonuses ("Saved as you go…"). The dock holds the status ("Tricks add up · add any bonuses, then score") and Score, magenta once every trick is accounted for and they add up. The last trick of the round takes every phone to results on its own (the dealer's phone drives it). The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
+Nobody has to lock in: everyone's tapped tricks count, and your round card saves itself as you change tricks or add bonuses ("Saved as you go…"). The results screen has no Standings Line, so there is never a pre-round total next to a post-round one; the line returns with the round-scored glide. "Round over" pressed before every trick is tapped opens the confirm sheet ("3 of 4 tricks counted. Anyone who won an uncounted trick gets no credit for it."). The dock holds the status ("Tricks add up · add any bonuses, then score") and Score, magenta once every trick is accounted for and they add up. The last trick of the round takes every phone to results on its own (the dealer's phone drives it). The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
 
 ### Compact Home
 Once a phone belongs to a crew, the home hero shrinks (smaller mark and title, no parade or 1-2-3 steps) so "New game with <crew>" sits in the first 200px.
@@ -496,13 +496,13 @@ Your row carries a small uppercase "you" pill in magenta outline beside your nam
 The final screen is centred: the crowned winner's 104px tile rises, the name follows at display size, and the winning total lands big in brass italic (count-up), then your personal line, the Standings Line, podium, rematch and awards.
 
 ### TV Reveal and Finale
-On the table screen the reveal is the whole stage: one 3:4 card per player (their colour washed on the back, "?" through the drumroll), flipping together with a 140ms stagger to show the bid and name at display size, the bid-total verdict beneath; after a few seconds it settles to the grid. The TV's final screen puts the crowned winner and brass total above a wide board (place, player, award with its line, total) that fits the screen for up to eight players.
+On the table screen the reveal is the whole stage: one 3:4 card per player (their colour washed on the back, "?" through the drumroll), flipping together with a 140ms stagger to show the bid and name at display size, the bid-total verdict beneath; after a few seconds it settles to the grid. The TV's final screen puts the crowned winner's tile, name and brass total on one line above a wide board (place, player, award with its line, total); four players fit a 1280×800 screen exactly, and a bigger table scrolls inside the board rather than hiding a row.
 
 ### Round-over Fallback
 When every trick is in, the play screen says "Every trick is in. Moving to results…"; if the dealer's phone has not moved the table within four seconds, a "Not moving? Tap here" link fades in on every phone.
 
-### Giving a Trick
-During play, another player's status chip is a button ("Give Ben a trick", with a small plus): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.
+### Trick Chips
+Every player's trick count during play is a number chip, "2/3" with the bid as the small denominator and a ✓ (bid met) or × (over) before it, so no language can wrap it; the full wording ("2 of 3", "Give Ben a trick") lives in the label for screen readers. Other players' chips are buttons (36px): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.
 
 ### Standings Strip
 During play the Standings Line shrinks to a one-line strip of pills (tile + sounding, leader first with a brass crown, you ringed in magenta), so "I won a trick" sits higher; the full line returns at the reveal and after scoring. Toasts during play drop in from the top, clear of the rows.

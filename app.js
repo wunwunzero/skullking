@@ -597,7 +597,7 @@ function crewView() {
   return `
   <h2 style="margin-top:24px">${t('Pick your character')}</h2>
   <p class="muted small" style="margin-top:0">${t('{name}, this is how the crew will see you on the scoreboard.', { name: esc(name(seat)) })}${champ ? ` ${t('You won the last game, so the Skull King is yours to claim.')}` : ''}
-    ${mine ? '' : `<button class="link inline" data-act="crew-skip">${t('Skip for now')}</button>`}</p>
+</p>
   <div class="crew-grid">
     ${order.map(id => {
       const c = CREW[id], who = takenBy[id], locked = c.earned && !champ, reward = c.earned && champ;
@@ -889,11 +889,11 @@ function boardRows(g, r, { showLive }) {
   return playersIn(g, r).map((p, i) => {
     const bid = bids[p.id], got = live[p.id] || 0, st = liveStatus(bid, got);
     let chip = !showLive ? '' : {
-      need: `<span class="chip">${t('{n} of {m}', { n: got, m: bid })}</span>`,
-      on: `<span class="chip good">${icon('check')}${t('{n} of {m}', { n: got, m: bid })}</span>`,
-      bust: `<span class="chip bad">${icon('x')}${t('{n} won · bid {m}', { n: got, m: bid })}</span>`,
-      safe0: `<span class="chip sk">${t('Zero bid · none won')}</span>`,
-      bust0: `<span class="chip bad">${icon('x')}${t('Zero · {n} won', { n: got })}</span>`, none: '',
+      need: `<span class="chip num" aria-label="${t('{n} of {m}', { n: got, m: bid })}">${got}<small>/${bid}</small></span>`,
+      on: `<span class="chip good num" aria-label="${t('{n} of {m}', { n: got, m: bid })}">${icon('check')}${got}<small>/${bid}</small></span>`,
+      bust: `<span class="chip bad num" aria-label="${t('{n} won · bid {m}', { n: got, m: bid })}">${icon('x')}${got}<small>/${bid}</small></span>`,
+      safe0: `<span class="chip sk num" aria-label="${t('Zero bid · none won')}">0<small>/0</small></span>`,
+      bust0: `<span class="chip bad num" aria-label="${t('Zero · {n} won', { n: got })}">${icon('x')}${got}<small>/0</small></span>`, none: '',
     }[st];
     if (canGive && p.id !== mine && chip) chip = chip.replace(/^<span class="chip/, `<button type="button" data-act="trick-for" data-id="${p.id}" aria-label="${t('Give {name} a trick', { name: esc(p.name) })}" class="chip give`).replace(/<\/span>$/, `${icon('plus', 'sm give-plus')}</button>`);
     return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
@@ -1036,7 +1036,6 @@ function resultsView(g) {
     : sum === n ? t('Tricks add up · add any bonuses, then score') : t("Tricks don't add up: check the numbers");
   const srcLabel = e => !e ? `<span class="src">${t('waiting')}</span>` : e.src === 'auto' ? `<span class="src">${t('auto-filled')}</span>` : '';
   return `
-  ${standingsLine(g)}
   ${mine ? `<div class="card ${myPending ? 'action' : ''}"><h2 class="t3">${S.actingFor ? t("{name}'s round {r}", { name: esc(name(mine)), r }) : t('Your round {r}', { r })}</h2>${resultForm(g, r, mine)}</div>` : ''}
   <div class="section-h"><h2 class="t3">${t('Round {r} results', { r })}</h2><span>${t('Totals after this round')}</span></div>
   <div class="board" style="--cols:${tableCols(ps.length)}">
@@ -1362,7 +1361,7 @@ function crewHomeView(c) {
   <div class="board game-log">${shown.map(g => {
     const rows = gameRows(g), w = rows.filter(x => x.place === 1);
     return `<button class="prow" data-act="pastgame" data-code="${g.code}">${memberTile(c.members?.[w[0]?.member] || { name: w[0]?.name, avatar: w[0]?.avatar })}
-      <div class="who"><b><span class="nm">${t('{name} won', { name: esc(w.map(x => x.name).join(' & ')) })}</span></b><span>${fmtDate(g.at)} · ${tn(rows.length, '{n} player', '{n} players')}${g.season !== season ? ` · ${t('Season {n}', { n: g.season })}` : ''}</span></div>
+      <div class="who"><b><span class="nm">${t('{name} won', { name: esc(w.map(x => x.name).join(' & ')) })}</span></b><span>${fmtDate(g.at)} · ${tn(rows.length, '{n} player', '{n} players')}${g.season !== season ? ` · <span class="nowrap">${t('Season {n}', { n: g.season })}</span>` : ''}</span></div>
       <span class="total">${plain(w[0]?.total ?? 0)}</span>${icon('lead', 'sm chev')}</button>`;
   }).join('')}</div>
   ${games.length > shown.length ? `<button class="link" data-act="crew-more">${t('Show all {n} games', { n: games.length })}</button>` : ''}` : ''}
@@ -1428,7 +1427,7 @@ function recordChart(c, m) {
 // wins so far, ending on their character. Same dash patterns and colours as the game chart.
 function seasonChart(c, season) {
   const games = crewGames(c, season).reverse();
-  if (games.length < 3) return '';
+  if (games.length < 5) return '';
   const board = leaderboard(c, season), ids = board.map(x => x.member);
   const n = games.length, W = 340, H = 170, L = 26, R = 30, T = 14, B = 22;
   const lines = Object.fromEntries(ids.map(m => [m, [0]]));
@@ -1855,7 +1854,7 @@ const actions = {
     announce(t('Bid {n}: locking in', { n: +el.dataset.n }));
     S.bidTimer = setTimeout(() => {
       const p = S.pendingBid; S.pendingBid = null; S.changing = false;
-      if (p && S.game?.phase === 'bidding' && S.game.round === p.r) update({ [`bids/${p.r}/${p.who}`]: p.n });
+      if (p && S.game?.phase === 'bidding' && S.game.round === p.r) { update({ [`bids/${p.r}/${p.who}`]: p.n }); announce(t('Bid {n} is in', { n: p.n })); }
       else render();
     }, BID_HOLD_MS);
   },
@@ -1867,9 +1866,13 @@ const actions = {
     announce(t('Tricks: {n} of {m}', { n: next, m: g.bids?.[r]?.[who] ?? '–' }));
     buzz(15);
   },
-  'to-results'() {
-    const g = S.game;
-    update(withHistory(g, { phase: 'results' }, '← Back to playing'));
+  async 'to-results'() {
+    const g = S.game, r = g.round, counted = tricksTapped(g, r);
+    if (g.phase === 'playing' && counted < r) {
+      const ok = await ask(t('Go to results early?'), t('{n} of {m} tricks counted. Anyone who won an uncounted trick gets no credit for it. You can still fix tricks on the results screen.', { n: counted, m: r }), t('Go to results'));
+      if (!ok || S.game.phase !== 'playing' || S.game.round !== r) return;
+    }
+    update(withHistory(S.game, { phase: 'results' }, '← Back to playing'));
   },
   'trick-for'(el) {
     try { localStorage.setItem('sk.giveTip', 'done'); } catch {}

@@ -453,6 +453,10 @@ export const DICT = {
     'Sea Witch': '海巫',
 
     // crews & history
+    "Go to results early?": "提前进入结果？",
+    "{n} of {m} tricks counted. Anyone who won an uncounted trick gets no credit for it. You can still fix tricks on the results screen.": "已记录 {n}/{m} 墩。没记录的墩不会计分。结果页面仍可修改墩数。",
+    "Go to results": "进入结果",
+    "Bid {n} is in": "预测 {n} 已提交",
     "You also have this on your home screen": "你的主屏幕上也有这个应用",
     "Opening the game there keeps your seat and character from last time. Copy the code {code} and type it in the app.": "在那里打开游戏，会记住你上次的座位和角色。复制代码 {code}，到应用里输入。",
     "{name} deals round 1": "第1轮由 {name} 发牌",
@@ -808,7 +812,7 @@ export const DICT = {
     'of': 'daripada',
     'Remove a trick': 'Tolak satu trik',
     '{name} won a trick': '{name} menang satu trik',
-    'I won a trick': 'Saya menang satu trik',
+    'I won a trick': 'Saya menang trik',
     '{name} leads every trick': '{name} main dahulu setiap trik',
     'Table:': 'Meja:',
     'of {n} trick played': 'daripada {n} trik dimainkan',
@@ -1073,6 +1077,10 @@ export const DICT = {
     'Sea Witch': 'Ahli Sihir Laut',
 
     // crews & history
+    "Go to results early?": "Ke keputusan awal?",
+    "{n} of {m} tricks counted. Anyone who won an uncounted trick gets no credit for it. You can still fix tricks on the results screen.": "{n} daripada {m} trik dikira. Trik yang tidak dikira tidak dapat mata. Trik masih boleh dibetulkan di skrin keputusan.",
+    "Go to results": "Ke keputusan",
+    "Bid {n} is in": "Bida {n} sudah masuk",
     "You also have this on your home screen": "Anda juga ada aplikasi ini di skrin utama",
     "Opening the game there keeps your seat and character from last time. Copy the code {code} and type it in the app.": "Buka permainan di situ supaya tempat duduk dan watak anda diingati. Salin kod {code} dan taip dalam aplikasi.",
     "{name} deals round 1": "{name} agih pusingan 1",
