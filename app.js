@@ -326,13 +326,14 @@ function focusKey() {
   return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}${d.c ? `[data-c="${d.c}"]` : ''}` : null;
 }
 
+const fitMode = () => !!S.game && !!S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700 && innerHeight >= 700;
 function render() {
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   // Bidding and playing fit the phone: the page doesn't scroll, the player list does (inside its box).
   // Tall enough (700px+) to hold the action card at full size: the page stays put and the player
   // list scrolls inside its box. Shorter screens simply scroll, with nothing shrunk.
-  document.body.classList.toggle('fit', !!S.game && S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700 && innerHeight >= 700);
+  document.body.classList.toggle('fit', fitMode());
   renderTop();
   if (!S.code && S.setup) { $app.innerHTML = setupView(); }
   else if (!S.code && S.crewCode) { $app.innerHTML = S.crew === undefined ? `<p class="loading">${t('Finding the ship…')}</p>` : S.crew ? crewHomeView(S.crew) : noCrewView(); }
@@ -859,7 +860,7 @@ function biddingView(g) {
   </div>`;
   const banner = lastRoundBanner(g);
   return `
-  ${standingsLine(g, { full: !!banner })}
+  ${banner && fitMode() ? standingsStrip(g) : standingsLine(g, { full: !!banner })}
   ${banner}
   ${card}
   <div class="section-h"><h2 class="t3">${mine && bids[mine] == null ? (waiting === 1 ? t('Waiting for you') : tn(waiting - 1, 'Waiting for you and {n} more', 'Waiting for you and {n} more')) : !waiting ? t('Revealing') : waiting <= 3 ? t('Waiting for {names}', { names: namesList(ps.filter(p => bids[p.id] == null)) }) : t('Waiting for {n}', { n: waiting })}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>

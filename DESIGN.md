@@ -489,7 +489,7 @@ The crew page leads with the season voyage chart (wins after each game, step lin
 ### Bid Lock-in
 Tapping a bid key selects it and shows a 4px bar filling in magenta over 1s with "Locking in N…" and a Change link; only then does the bid count (and, for the last bidder, set off the reveal). A mis-tap on a phone lying flat can be changed before anyone sees it.
 
-Changing a bid that's in takes it back: the old number keeps a dashed magenta outline ("your bid before"), a line says "Bid N taken back. Tap a number to bid again.", your row shows a dashed "Not in" chip and the header reads "Waiting for you". During the reveal drumroll the player rows read "Bid ?" with no chips, so nothing leaks below the face-down strip. The round-scored card stays on each phone until that phone bids; its Undo link sits below the card, not inside it.
+Changing a bid that's in takes it back: the old number keeps a dashed magenta outline ("your bid before"), a line says "Bid N taken back. Tap a number to bid again.", your row shows a dashed "Not in" chip and the header reads "Waiting for you". During the reveal drumroll the player rows read "Bid ?" with no chips, so nothing leaks below the face-down strip. The round-scored card stays on each phone until that phone bids (on a fixed-layout phone the thin standings strip stands in for the full Standings Line while it shows, so the crew list keeps its rows); its Undo link sits below the card, not inside it.
 ### You, In Words
 Your row carries a small uppercase "you" pill in magenta outline beside your name (and screen readers hear "(you)" in the Standings Line), so "you" never rests on colour alone. Role badges (dealer, leads tricks) sit on the row's second line so the name never gives up its width.
 
