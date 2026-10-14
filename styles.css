@@ -304,6 +304,10 @@ button.chip.nudge:hover { color: var(--magenta); border-color: var(--magenta); }
 .bid-grid button:hover { background: var(--tint-2); }
 .bid-grid button:active { transform: scale(.96); }
 .bid-grid button.on { background: var(--magenta); color: var(--on-magenta); border-color: var(--magenta); }
+/* A bid taken back with Change: the old number keeps a dashed outline, not the selected fill */
+.bid-grid button.was { border: 2px dashed color-mix(in srgb, var(--magenta) 70%, transparent); color: var(--magenta); }
+.retracted { display: flex; align-items: center; gap: 6px; margin: 10px 0 0; font-weight: 650; color: var(--magenta); }
+.chip.out { background: transparent; border-style: dashed; color: var(--magenta); border-color: color-mix(in srgb, var(--magenta) 60%, transparent); }
 .wager { margin-top: 12px; }
 
 /* ---------- trick counter ---------- */
@@ -679,7 +683,7 @@ select:focus { border-color: var(--magenta); outline: none; }
 .cycle { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
 .cycle .ava { width: 40px; height: 40px; border-radius: 11px; }
 .cycle > span { display: grid; justify-items: center; color: var(--ink-2); flex: 1; min-width: 0; }
-.cycle small { font-size: .72rem; font-style: italic; }
+.cycle small { font-size: .75rem; font-style: italic; }
 
 /* Awards: one title per player */
 .awards { list-style: none; margin: 4px 0 0; padding: 0; display: grid; }
@@ -813,10 +817,10 @@ p, .note { text-wrap: pretty; }
 .scores.many { table-layout: fixed; width: 100%; }
 .scores.many th, .scores.many td { padding: 4px 1px; }
 .scores.many th:first-child, .scores.many td.rn { width: 20px; }
-.scores.many th { font-size: .7rem; max-width: none; overflow: hidden; text-overflow: ellipsis; }
+.scores.many th { font-size: .75rem; max-width: none; overflow: hidden; text-overflow: ellipsis; }
 .scores.many th .ava { width: 20px; height: 20px; }
 .scores.many td button, .scores.many .ro { min-width: 0; width: 100%; padding: 4px 0; font-size: .82rem; }
-.scores.many td small { font-size: .68rem; }
+.scores.many td small { font-size: .75rem; }
 .scores.many tfoot td { font-size: .86rem; }
 
 /* ---------- critique #5 ---------- */
@@ -910,9 +914,11 @@ body.table .tv-head { margin: 10px 0 8px; font-size: 1.2rem; }
 /* Rows: the name never gives way; roles ride on the second line; "you" in words, not just colour */
 .prow .who > b .nm { flex: 0 1 auto; min-width: 3.2em; }
 .prow .who > .roles { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; font-size: .875rem; color: var(--ink-2); margin-top: 2px; }
-.prow .who > .roles .badge { font-size: .72rem; }
+.prow .who > .roles .badge { font-size: .75rem; }
 .you-tag { flex: none; font-size: .72rem; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; color: var(--magenta); border: var(--hair) solid currentColor; border-radius: 999px; padding: 0 6px; line-height: 1.5; }
 .src { white-space: nowrap; }
+.src.editing { color: var(--magenta); font-style: italic; }
+.bonus-done { margin-top: 10px; }
 /* Toasts float above the bottom dock */
 .toast { bottom: calc(20px + var(--dock-h, 0px) + env(safe-area-inset-bottom)); }
 /* Bid lock-in: a 2s bar with Change */
@@ -935,7 +941,9 @@ button.chip.give::after { inset: -7px -4px; }
 .tv-grid .tv-mark { width: 26px; height: 26px; margin-right: 8px; vertical-align: -2px; stroke-width: 2.6; }
 body.table #top .round b { font-size: 1.8rem; }
 body.table #top .round small { font-size: 1.05rem; }
-body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 360px) / var(--rows, 8))); }
+body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 400px) / var(--rows, 8))); }
+/* While the sound pill waits in the corner, the rows stop short of it */
+body.table:has(.tv-sound) .tv-grid tbody tr { height: max(56px, calc((100dvh - 460px) / var(--rows, 8))); }
 /* Finale: centred; the crowned winner rises; the total lands big in brass */
 .winner.finale { text-align: center; padding-top: 7vh; }
 .winner.finale .hero-flags { justify-content: center; }
@@ -1045,8 +1053,8 @@ body.table .tv-finale ~ .standings .lanes { padding-top: 12px; }
 .destroyed-btn { margin-top: 10px; gap: 8px; }
 .destroyed-btn .chip { padding: 1px 8px; font-size: .8rem; }
 /* TV: one tap to unlock sound */
-.tv-sound { display: flex; align-items: center; gap: 14px; margin: 8px 0 4px; padding: 10px 14px; border-radius: 14px;
-  border: var(--hair) solid var(--line-strong); background: var(--surface); font-size: 1.05rem; }
+.tv-sound { position: fixed; right: 24px; bottom: 24px; z-index: 30; max-width: min(560px, calc(100vw - 48px)); display: flex; align-items: center; gap: 14px; padding: 10px 14px; border-radius: 14px;
+  border: var(--hair) solid var(--line-strong); background: var(--surface); font-size: 1.05rem; box-shadow: 0 8px 28px rgba(0, 0, 0, .22); }
 .tv-sound > span { display: flex; align-items: center; gap: 8px; flex: 1; }
 .tv-sound .btn.mini { width: auto; }
 
@@ -1074,7 +1082,7 @@ input:focus-visible, select:focus-visible { outline: 2px solid var(--magenta); o
 /* ---------- critique #8 ---------- */
 /* Trick chips are numbers: "2/3" with a ✓ or ×; no language can wrap them */
 .chip.num { white-space: nowrap; font-variant-numeric: tabular-nums; font-style: italic; font-weight: 750; gap: 3px; }
-.chip.num small { font-size: .78em; font-weight: 600; opacity: .75; }
+.chip.num small { font-size: .86em; font-weight: 650; opacity: .85; }
 /* Give-a-trick chips look as tappable as they are */
 button.chip.give { min-height: 36px; padding-inline: 10px 8px; }
 .nowrap { white-space: nowrap; }
@@ -1096,7 +1104,7 @@ body.fit .play-card .bids-strip { gap: 5px; }
 body.fit .play-card .bid-cell { padding: 6px 3px 4px; gap: 2px; }
 body.fit .play-card .bid-cell b { font-size: 1.45rem; }
 body.fit .play-card .bid-cell .ava { width: 24px; height: 24px; }
-body.fit .play-card .bid-cell small { font-size: .7rem; }
+body.fit .play-card .bid-cell small { font-size: .75rem; }
 body.fit .play-card .table-line { margin: 8px 0 0; }
 body.fit .counter { margin-top: 8px; }
 body.fit .counter .btn { min-height: 68px; }
@@ -1112,6 +1120,6 @@ body.fit .stuck { margin: 8px 2px 0; }
 /* Very narrow phones: the round title drops a size so "Round 10 / 10" stays whole */
 @media (max-width: 340px) {
   #top .round b { font-size: .9rem; }
-  #top .round small { font-size: .74rem; }
+  #top .round small { font-size: .75rem; }
   .code-chip { padding: 0 7px 0 6px; letter-spacing: .05em; font-size: .74rem; }
 }

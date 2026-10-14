@@ -180,7 +180,7 @@ function drumroll(dur) {
   burst(end, .16, .6, 'highpass', 5000);
 }
 const DRUM_MS = 1100;
-const BID_HOLD_MS = 2000;
+const BID_HOLD_MS = 1000;
 
 // ---------- wake lock ----------
 let wakeLock = null;
@@ -244,7 +244,7 @@ function onGame(g) {
       if (nailed && g.phase !== 'done') { fanfare(); buzz([40, 50, 40, 50, 160]); }
       announce(`${t('Round {r} scored.', { r })}${mine ? ` ${t('You {n}.', { n: signed(tot[mine].rounds[r]) })}` : ''} ${t('{name} is ahead with {n}.', { name: lead.name, n: plain(lead.total) })}`);
     }
-    if (prev && prev.phase === 'playing' && g.phase === 'results' && prev.round === g.round) announce(t('Round {r} over: check your tricks and lock in.', { r: g.round }));
+    if (prev && prev.phase === 'playing' && g.phase === 'results' && prev.round === g.round) announce(t('Round {r} over: check your tricks and add any bonuses.', { r: g.round }));
     S.finalAnim = !!(prev && prev.phase !== 'done' && g.phase === 'done');
     if (S.finalAnim) { chime(); buzz([80, 60, 80, 60, 240]); }
     S.lastPhaseKey = key;
@@ -746,7 +746,9 @@ function standingsStrip(g) {
 // Round-scored card: your result first (the "nailed it" moment), then everyone's round.
 function lastRoundBanner(g) {
   const r = g.round - 1;
-  if (r < 1 || g.phase !== 'bidding' || (g.bids?.[g.round] && Object.keys(g.bids[g.round]).length)) return '';
+  // Each phone keeps its round card until it bids (a seat-less screen until anyone bids).
+  const nowBids = g.bids?.[g.round] || {}, seat = meIn(g, g.round);
+  if (r < 1 || g.phase !== 'bidding' || (seat ? nowBids[seat] != null : Object.keys(nowBids).length)) return '';
   const tot = totals(g), mine = meIn(g, r);
   const lines = roundHighlights(g, r, name).filter(l => !(mine && l.id === mine && l.kind === 'zero') && l.icon !== 'down');
   const myScore = mine ? tot[mine].rounds[r] : null;
@@ -761,8 +763,8 @@ function lastRoundBanner(g) {
   return `<div class="card scored ${mine ? (nailed ? 'nailed' : myScore < 0 || (g.scoring === 'rascal' && myScore === 0) ? 'missed' : '') : ''}">
     ${mine ? '' : `<h2 class="t3">${t('Round {r} scored', { r })}</h2>`}${outcome}
     ${rows ? `<div class="round-row">${mine ? `<span>${t('Round {r}', { r })}:</span>` : ''}${rows}</div>` : ''}
-    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}
-    ${undoCard(g)}</div>`;
+    ${lines.length ? `<ul class="hl">${lines.map(l => `<li>${icon(l.icon)}<span>${esc(l.text)}</span></li>`).join('')}</ul>` : ''}</div>
+  ${undoCard(g)}`;
 }
 function undoCard(g) {
   const u = lastUndo(g);
@@ -794,7 +796,9 @@ function tvView(g) {
   const waiting = ps.filter(p => bids[p.id] == null);
   const head = g.phase === 'bidding' ? (waiting.length ? t('Waiting for {names}', { names: waiting.map(p => esc(p.name)).join(', ') }) : t('Revealing'))
     : g.phase === 'playing' ? `${t('Tricks played')} <b class="sounding">${played}</b> / ${r} · ${t('{name} leads every trick', { name: esc(name(leaderFor(g, r))) })}`
-    : ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0) === tricksInRound(g, r) ? t('Tricks add up') : t("Tricks don't add up: check the numbers");
+    : ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0) !== tricksInRound(g, r) ? t("Tricks don't add up: check the numbers")
+    : ps.some(p => isEditing(g, p.id)) ? tn(ps.filter(p => isEditing(g, p.id)).length, '{names} is adding bonuses…', '{names} are adding bonuses…', { names: namesList(ps.filter(p => isEditing(g, p.id))) })
+    : t('Tricks add up');
   // The reveal, big: bids sit face down through the drumroll, then flip row by row.
   const drum = g.phase === 'playing' && S.drumUntil > Date.now();
   const flip = g.phase === 'playing' && !drum && S.flipPending;
@@ -832,6 +836,7 @@ function biddingView(g) {
   const cannon = !!g.cannon?.[r]?.[mine];
   const pending = S.pendingBid && S.pendingBid.r === r && S.pendingBid.who === mine ? S.pendingBid : null;
   const locked = mine && bids[mine] != null && !S.changing && !pending;
+  const was = mine && bids[mine] == null && !pending && S.changing && S.prevBid != null ? S.prevBid : null;
   const teach = g.scoring === 'rascal'
     ? t('Your bid is how many tricks you think you’ll win this round.')
     : t('Your bid is how many tricks you think you’ll win. Exactly right: +20 each (zero bid: +{n}). Off: −10 per trick.', { n: 10 * r });
@@ -844,7 +849,8 @@ function biddingView(g) {
     : `<div class="card action">
     <h2 class="t3">${S.actingFor ? t('How many tricks will {name} win?', { name: esc(name(mine)) }) : t('How many tricks will you win?')} <span class="muted">· ${tn(r, '{n} card', '{n} cards')}</span></h2>
     <p class="muted small" style="margin:0">${r <= 2 ? `${teach} ` : ''}<button class="link inline" data-act="rules">${t('How scoring works')}</button> · <button class="link inline" data-act="cheat">${t('What beats what')}</button></p>
-    <div class="bid-grid" role="group" aria-label="${t('Your bid')}" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => { const on = pending ? pending.n === n : (bids[mine] ?? (S.changing ? S.prevBid : null)) === n; return `<button data-act="bid" data-n="${n}" class="${on ? 'on' : ''}" aria-pressed="${on}" aria-label="${tn(n, 'Bid {n} trick', 'Bid {n} tricks')}">${n}</button>`; }).join('')}</div>
+    <div class="bid-grid" role="group" aria-label="${t('Your bid')}" style="--keys:${r + 1 <= 6 ? r + 1 : Math.ceil((r + 1) / 2)}">${Array.from({ length: r + 1 }, (_, n) => { const on = pending ? pending.n === n : bids[mine] === n; return `<button data-act="bid" data-n="${n}" class="${on ? 'on' : was === n ? 'was' : ''}" aria-pressed="${on}" aria-label="${tn(n, 'Bid {n} trick', 'Bid {n} tricks')}${was === n ? ` (${t('your bid before')})` : ''}">${n}</button>`; }).join('')}</div>
+    ${was != null ? `<p class="retracted" role="status">${icon('undo', 'sm')}${t('Bid {n} taken back. Tap a number to bid again.', { n: was })}</p>` : ''}
     ${pending ? `<div class="locking" role="status"><span class="locking-bar" style="--hold:${BID_HOLD_MS}ms;--elapsed:-${Date.now() - pending.at}ms"></span><span>${t('Locking in {n}…', { n: pending.n })}</span><button class="link" data-act="cancel-bid">${t('Change')}</button></div>` : ''}
     ${g.scoring === 'rascal' ? `<div class="seg wager" role="radiogroup" aria-label="${t('Rascal wager')}">
       <button type="button" role="radio" aria-checked="${!cannon}" class="${!cannon ? 'on' : ''}" data-act="cannon" data-v="0"><b>${icon('target', 'sm')}${t('Grapeshot')}</b><span>${t('{n} pts · half if off by 1', { n: 10 * r })}</span></button>
@@ -856,11 +862,11 @@ function biddingView(g) {
   ${standingsLine(g, { full: !!banner })}
   ${banner}
   ${card}
-  <div class="section-h"><h2 class="t3">${waiting === 1 && mine && bids[mine] == null ? t('Waiting for you') : waiting ? t('Waiting for {n}', { n: waiting }) : t('Revealing')}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
+  <div class="section-h"><h2 class="t3">${mine && bids[mine] == null ? (waiting === 1 ? t('Waiting for you') : tn(waiting - 1, 'Waiting for you and {n} more', 'Waiting for you and {n} more')) : !waiting ? t('Revealing') : waiting <= 3 ? t('Waiting for {names}', { names: namesList(ps.filter(p => bids[p.id] == null)) }) : t('Waiting for {n}', { n: waiting })}</h2><span>${t('{n} of {m} in', { n: ps.length - waiting, m: ps.length })}</span></div>
   <div class="fit-scroll"><div class="board" style="--cols:${tableCols(ps.length)}">
     ${ps.map(p => `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
       <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b>${roleBadges(g, r, p.id) ? `<span class="roles">${roleBadges(g, r, p.id)}</span>` : ''}</div>
-      ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : nudgeChip(p.id, mine)}
+      ${bids[p.id] != null ? `<span class="chip lock">${icon('check')}${t('In')}</span>` : p.id === mine ? `<span class="chip out">${t('Not in')}</span>` : nudgeChip(p.id, mine)}
       <span></span></div>`).join('')}${tableFill(ps.length)}
   </div></div>`;
 }
@@ -890,9 +896,11 @@ function boardRows(g, r, { showLive }) {
   const bids = g.bids?.[r] || {}, live = g.live?.[r] || {}, tot = totals(g), mine = me();
   // Anyone can log a trick for another player by tapping their chip (for a phone that's away).
   const canGive = showLive && g.phase === 'playing' && !(S.seat === 'watch' && !S.actingFor) && tricksTapped(g, r) < r;
+  // Through the drumroll every bid stays face down here too.
+  const drum = g.phase === 'playing' && S.drumUntil > Date.now();
   return playersIn(g, r).map((p, i) => {
-    const bid = bids[p.id], got = live[p.id] || 0, st = liveStatus(bid, got);
-    let chip = !showLive ? '' : {
+    const bid = drum ? '?' : bids[p.id], got = live[p.id] || 0, st = liveStatus(bids[p.id], got);
+    let chip = !showLive || drum ? '' : {
       need: `<span class="chip num" aria-label="${t('{n} of {m}', { n: got, m: bid })}">${got}<small>/${bid}</small></span>`,
       on: `<span class="chip good num" aria-label="${t('{n} of {m}', { n: got, m: bid })}">${icon('check')}${got}<small>/${bid}</small></span>`,
       bust: `<span class="chip bad num" aria-label="${t('{n} won · bid {m}', { n: got, m: bid })}">${icon('x')}${got}<small>/${bid}</small></span>`,
@@ -901,7 +909,7 @@ function boardRows(g, r, { showLive }) {
     }[st];
     if (canGive && p.id !== mine && chip) chip = chip.replace(/^<span class="chip/, `<button type="button" data-act="trick-for" data-id="${p.id}" aria-label="${t('Give {name} a trick', { name: esc(p.name) })}" class="chip give`).replace(/<\/span>$/, `${icon('plus', 'sm give-plus')}</button>`);
     return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span class="roles">${roleBadges(g, r, p.id)}<span class="bidtxt">${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></span></div>
+      <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span class="roles">${roleBadges(g, r, p.id)}<span class="bidtxt">${t('Bid')} <b>${bid ?? '–'}</b>${!drum && g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''}</span></span></div>
       ${chip}<span class="total">${plain(tot[p.id].total)}</span></div>`;
   }).join('') + tableFill(playersIn(g, r).length);
 }
@@ -1016,13 +1024,36 @@ function resultForm(g, r, pid) {
   return `
     ${stepper('draft', 'tricks', t('Tricks won'), `${t('Bid')} ${bid ?? '–'}`, d.tricks ?? 0, tricksInRound(g, r))}
     ${!keys.length ? '' : open ? keys.map(k => bonusStepper('draft', k, d[k] || 0, true)).join('')
-      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${t('Add bonuses (14s, Pirates, Mermaids, Skull King)')}</span></button>`}
+      : `<button class="link" data-act="open-bonus">${icon('plus', 'sm')}<span>${keys.length === 1 && keys[0] === 'loot' ? t('Add Loot alliances') : t('Add bonuses (14s, Pirates, Mermaids, Skull King)')}</span></button>`}
+    ${open && keys.length && S.editMarked && g.editing?.[pid] ? `<button class="btn mini bonus-done" data-act="bonus-done">${icon('check', 'sm')}${t('Done adding bonuses')}</button>` : ''}
     ${open && keys.length && !made ? `<p class="small muted" style="margin:4px 0 0">${t(g.scoring === 'rascal' && !g.cannon?.[r]?.[pid] && Math.abs((d.tricks ?? 0) - bid) === 1 ? 'Off by one: half of everything, bonuses included.' : 'Bonuses only count when the bid is made.')}</p>` : ''}
     <div class="preview"><span class="muted">${t('This round')}</span><b class="${score >= 0 ? 'good-t' : 'bad-t'}">${score == null ? '–' : signed(score)}</b></div>
     <p class="small muted saved-note">${icon('check', 'sm')}${t('Saved as you go. You can change it until the round is scored.')}</p>`;
 }
 const bonusStepper = (act, k, val, hint) =>
   stepper(act, k, `${esc(t(BONUS[k].label))} <span class="muted small">+${BONUS[k].pts}</span>`, hint ? esc(t(BONUS[k].hint)) : '', val, BONUS[k].max);
+
+// Who's in the middle of adding bonuses (on another phone): a timestamp each phone refreshes
+// while it edits, so Score can wait for them. Stale 15 s after their last bonus tap.
+function isEditing(g, pid) { return g.phase === 'results' && Date.now() - (g.editing?.[pid] || 0) < 15000; }
+function editorsElsewhere(g, r) {
+  const ps = playersIn(g, r).filter(p => p.id !== S.seat && p.id !== S.actingFor && isEditing(g, p.id));
+  // Redraw when the oldest mark runs out, so a phone that went quiet stops holding Score back.
+  if (ps.length) {
+    const next = Math.min(...ps.map(p => g.editing[p.id] + 15000 - Date.now()));
+    clearTimeout(S.editTimer); S.editTimer = setTimeout(render, Math.max(500, next + 100));
+  }
+  return ps;
+}
+function markEditing(on = true) {
+  const who = me();
+  if (!who || !S.game) return;
+  if (on && Date.now() - (S.editMarked || 0) < 4000) return;
+  S.editMarked = on ? Date.now() : 0;
+  // Best effort: an older rules file may not allow it yet, and that must never show an error.
+  S.store.update(S.code, { [`editing/${who}`]: on ? Date.now() : null }).catch(() => {});
+}
+function namesList(ps) { return ps.map(p => esc(p.name)).join(', '); }
 
 function resultsView(g) {
   if (tvMode()) return tvView(g);
@@ -1031,9 +1062,12 @@ function resultsView(g) {
   const sum = ps.reduce((s, p) => s + (eff[p.id]?.tricks || 0), 0);
   const tot = totals(g), watch = S.seat === 'watch' && !S.actingFor;
   // Everyone's tapped tricks count straight away; rounds save as they're changed. Score is
-  // magenta once every trick is accounted for and they add up.
-  const ready = sum === n;
-  const status = sum === n ? t('Tricks add up · add any bonuses, then score') : t("Tricks don't add up: check the numbers");
+  // magenta once every trick is accounted for and they add up, and nobody is mid-bonus.
+  const editors = editorsElsewhere(g, r);
+  const ready = sum === n && !editors.length;
+  const status = sum !== n ? t("Tricks don't add up: check the numbers")
+    : editors.length ? tn(editors.length, '{names} is adding bonuses…', '{names} are adding bonuses…', { names: namesList(editors) })
+    : t('Tricks add up · add any bonuses, then score');
   const srcLabel = e => !e ? `<span class="src">${t('waiting')}</span>` : e.src === 'auto' ? `<span class="src">${t('auto-filled')}</span>` : '';
   return `
   ${mine ? `<div class="card"><h2 class="t3">${S.actingFor ? t("{name}'s round {r}", { name: esc(name(mine)), r }) : t('Your round {r}', { r })}</h2>${resultForm(g, r, mine)}</div>` : ''}
@@ -1043,7 +1077,7 @@ function resultsView(g) {
       const e = eff[p.id], bid = g.bids?.[r]?.[p.id], s = e ? scoreFor(g, r, p.id, e) : null;
       const made = e && bid === e.tricks;
       return `<div class="prow ${p.id === mine ? 'me' : ''}" style="--crew:${color(p.id)}">${flag(p.id)}
-        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}</span></div>
+        <div class="who"><b><span class="nm">${esc(p.name)}</span>${p.id === S.seat || p.id === S.actingFor ? `<span class="you-tag">${t('you')}</span>` : ''}</b><span>${t('Bid')} <b>${bid ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? ` ${icon('cannon', 'sm')}` : ''} · ${t('won')} <b>${e ? e.tricks : '–'}</b>${srcLabel(e) ? ` · ${srcLabel(e)}` : ''}${editors.some(x => x.id === p.id) ? ` · <span class="src editing">${t('adding bonuses…')}</span>` : ''}</span></div>
         ${e ? `<span class="chip ${made ? 'good' : s > 0 ? '' : 'bad'}">${made ? icon('check') : s > 0 ? '' : icon('x')}${signed(s)}</span>` : ''}
         <span class="total">${plain(tot[p.id].total + (s || 0))}</span></div>`;
     }).join('')}${tableFill(ps.length)}
@@ -1894,7 +1928,8 @@ const actions = {
     } });
   },
   'fix-bids'() { S.sheet = { kind: 'bidpick' }; renderSheet(); },
-  'open-bonus'() { S.bonusOpen[`${S.game.round}:${me()}`] = true; render(); },
+  'open-bonus'() { S.bonusOpen[`${S.game.round}:${me()}`] = true; markEditing(); render(); },
+  'bonus-done'() { markEditing(false); render(); toast(t('Bonuses saved')); },
   // Your round saves itself as you change it: no lock-in tap, and nothing is held back on a
   // phone when someone else scores.
   draft(el) {
@@ -1905,24 +1940,21 @@ const actions = {
     const d = S.drafts[key] ||= { ...draftFor(g, r, who) };
     const k = el.dataset.k, max = k === 'tricks' ? tricksInRound(g, r) : BONUS[k].max;
     d[k] = Math.max(0, Math.min(max, (d[k] || 0) + +el.dataset.d));
+    if (k !== 'tricks') markEditing();
     const clean = { tricks: d.tricks || 0 };
     bonusKeys(g, clean.tricks).forEach(b => { if (d[b]) clean[b] = d[b]; });
     update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
     render();
   },
-  confirm() {
-    const g = S.game, r = g.round, who = me(), key = `${r}:${who}`;
-    const d = { ...draftFor(g, r, who) };
-    const clean = { tricks: d.tricks || 0 };
-    bonusKeys(g, clean.tricks).forEach(k => { if (d[k]) clean[k] = d[k]; });
-    delete S.drafts[key];
-    if (S.actingFor) S.actingFor = null;
-    update({ [`results/${r}/${who}`]: clean, [`live/${r}/${who}`]: clean.tricks });
-    toast(t('Locked in'));
-  },
-  async score() {
+  async score(asked) {
     const g = S.game, r = g.round, eff = effectiveResults(g, r), patch = {};
     if (S.game.phase !== 'results' || S.game.round !== r) return;
+    const editors = asked === true ? [] : editorsElsewhere(g, r);
+    if (editors.length) {
+      const ok = await ask(t('Score now?'), tn(editors.length, '{names} is still adding bonuses. Score anyway?', '{names} are still adding bonuses. Score anyway?', { names: namesList(editors) }), t('Score anyway'));
+      if (!ok || S.game.phase !== 'results' || S.game.round !== r) return;
+      return actions.score(true);
+    }
     // Anyone this phone hasn't heard from gets their live count saved, but only if nothing is
     // there yet: their own save (bonuses included) may still be on its way here.
     for (const [pid, e] of Object.entries(eff)) {
@@ -1934,6 +1966,8 @@ const actions = {
     withHistory(g, patch, `↶ Undo scoring round ${r}`);
     S.drafts = {};
     update(patch);
+    // Separate and best effort, so scoring still works before the rules allow `editing`.
+    if (g.editing) S.store.update(S.code, { editing: null }).catch(() => {});
     toast(t('Round {r} scored', { r }), { label: t('Undo'), run: () => actions.undo() });
   },
   undo() {

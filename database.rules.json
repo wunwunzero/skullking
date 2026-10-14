@@ -158,6 +158,12 @@
             ".validate": "$r.matches(/^([1-9]|10)$/) && newData.isString() && newData.val().matches(/^p[0-7]$/)"
           }
         },
+        "editing": {
+          ".write": "auth != null && data.parent().exists()",
+          "$pid": {
+            ".validate": "$pid.matches(/^p[0-7]$/) && newData.isNumber()"
+          }
+        },
         "destroyed": {
           ".write": "auth != null && data.parent().exists()",
           "$r": {
