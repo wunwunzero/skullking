@@ -480,6 +480,9 @@ A crew page reached from a card at the top of the home screen ("Your crew", name
 ### Results and Score
 Nobody has to lock in: everyone's tapped tricks count, and your round card saves itself as you change tricks or add bonuses ("Saved as you go…"). The dock holds the status ("Tricks add up · add any bonuses, then score") and Score, magenta once every trick is accounted for and they add up. The last trick of the round takes every phone to results on its own (the dealer's phone drives it). The dock's Score button stays secondary ("Score now") until every player has locked in, and scoring early asks first, naming who hasn't locked in, so nobody's bonus is lost. Rows show their score chip only once that player has locked in; until then they offer Nudge. The lobby uses the same sticky dock: "N of M phones joined" and Start round 1, and its QR shrinks to 112px once every seat is on a phone.
 
+### Compact Home
+Once a phone belongs to a crew, the home hero shrinks (smaller mark and title, no parade or 1-2-3 steps) so "New game with <crew>" sits in the first 200px.
+
 ### Crew Logbook and Player Record
 The crew page leads with the season voyage chart (wins after each game, step lines) right under the crew name, then the last-winner card and New game. The leaderboard opens with a Standings Line of wins (same bands, ticks and markers as the game; tied sailors share a marker) above the tappable rows. A player's sheet is a record, not a tile grid: a strip of four soundings (games, wins, average, bid accuracy) between hairlines, a game-by-game score line in their character colour with wins as brass dots and the best/worst labelled, then a short log (best game, best round, bids made, zero bids, favourite character) and head to head.
 
@@ -491,6 +494,12 @@ Your row carries a small uppercase "you" pill in magenta outline beside your nam
 
 ### Finale
 The final screen is centred: the crowned winner's 104px tile rises, the name follows at display size, and the winning total lands big in brass italic (count-up), then your personal line, the Standings Line, podium, rematch and awards.
+
+### TV Reveal and Finale
+On the table screen the reveal is the whole stage: one 3:4 card per player (their colour washed on the back, "?" through the drumroll), flipping together with a 140ms stagger to show the bid and name at display size, the bid-total verdict beneath; after a few seconds it settles to the grid. The TV's final screen puts the crowned winner and brass total above a wide board (place, player, award with its line, total) that fits the screen for up to eight players.
+
+### Round-over Fallback
+When every trick is in, the play screen says "Every trick is in. Moving to results…"; if the dealer's phone has not moved the table within four seconds, a "Not moving? Tap here" link fades in on every phone.
 
 ### Giving a Trick
 During play, another player's status chip is a button ("Give Ben a trick", with a small plus): one tap logs a trick for them, with an Undo toast. Your own row keeps the big "I won a trick" button.

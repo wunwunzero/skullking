@@ -233,6 +233,7 @@ function onGame(g) {
       clearTimeout(S.drumTimer);
       S.drumTimer = setTimeout(() => {
         chime(); buzz(60); render();
+        if (tvMode()) setTimeout(render, 4500);   // the TV holds the flipped cards, then settles to the grid
         announce(`${t('All bids in.')} ${playersIn(g, g.round).map(p => `${p.name} ${b[p.id]}`).join(', ')}.`);
       }, wait);
     }
@@ -435,14 +436,15 @@ function renderTop() {
 
 // ---------- home & setup ----------
 function homeView() {
-  return `
-  <section class="hero">${mark()}<h1>Skull King</h1><p>${t('Live scores for the whole table.')}</p>
-    <div class="parade" aria-hidden="true">${['captain', 'coralia', 'kraken', 'parrot', 'ghost', 'tigress', 'crab'].map((id, i) => `<span style="--i:${i}">${avatarTile(id)}</span>`).join('')}</div>
-    <ol class="steps">
+  const returning = myCrews().length > 0;
+  const steps = `<ol class="steps">
       <li><b>1</b><span>${t('Everyone bids on their own phone')}</span></li>
       <li><b>2</b><span>${t('Bids reveal together, like the fist shake')}</span></li>
       <li><b>3</b><span>${t('Tap when you win a trick; scoring is automatic')}</span></li>
-    </ol></section>
+    </ol>`;
+  return `
+  <section class="hero ${returning ? 'compact' : ''}">${mark()}<h1>Skull King</h1><p>${t('Live scores for the whole table.')}</p>
+    ${returning ? '' : `<div class="parade" aria-hidden="true">${['captain', 'coralia', 'kraken', 'parrot', 'ghost', 'tigress', 'crab'].map((id, i) => `<span style="--i:${i}">${avatarTile(id)}</span>`).join('')}</div>${steps}`}</section>
   ${myCrews().length ? `${myCrews().map((c, i) => `${i ? '' : `<button class="btn primary" data-act="crew-quick" data-c="${c.code}">${icon('plus')} ${t('New game with {crew}', { crew: esc(c.name) })}</button>`}
     <button class="card crew-link" data-act="open-crew" data-c="${c.code}">${icon('users')}<div><small>${t('History, leaderboard and stats')}</small><b>${esc(c.name)}</b></div>${icon('lead')}</button>`).join('')}
     `
@@ -761,6 +763,14 @@ function tvView(g) {
   const flip = g.phase === 'playing' && !drum && S.flipPending;
   if (flip) S.flipPending = false;
   const hint = revealed && !drum ? bidHint(g, r) : null;
+  // The reveal on the big screen: every bid as a card face down, flipping together.
+  if (g.phase === 'playing' && (drum || flip)) {
+    return `<div class="tv-reveal ${drum ? 'drum' : 'flip'}" style="--cols:${ps.length <= 4 ? ps.length : Math.ceil(ps.length / 2)}" role="group" aria-label="${t('Bids this round')}">
+      ${ps.map((p, i) => `<div class="tv-card" style="--i:${i};--crew:${color(p.id)}"><div class="face back">${flag(p.id)}<b>?</b></div>
+        <div class="face front">${flag(p.id)}<b>${bids[p.id] ?? '–'}</b>${g.cannon?.[r]?.[p.id] ? icon('cannon', 'sm') : ''}<small>${esc(p.name)}</small></div></div>`).join('')}
+    </div>
+    ${flip && hint ? `<p class="verdict tv-verdict">${icon(hint.icon)}<span>${esc(hint.text)}</span></p>` : ''}`;
+  }
   return `${g.phase === 'bidding' ? lastRoundBanner(g) : ''}
   ${standingsLine(g, { full: true })}
   <div class="tv-head"><p>${head}</p>${hint ? `<p class="verdict">${icon(hint.icon, 'sm')}<span>${esc(hint.text)}</span></p>` : ''}</div>
@@ -898,7 +908,8 @@ function playingView(g) {
   ${canDestroy && !watch && (me() === dealerFor(g, r)) ? destroyCard(destroyed, done) : ''}
   <div class="board" style="--cols:${tableCols(ps.length)}">${boardRows(g, r, { showLive: true })}</div>
   ${!watch && !giveTipSeen() ? `<p class="small muted give-tip">${icon('plus', 'sm')}${t('Someone’s phone away? Tap their chip to give them a trick.')}</p>` : ''}
-  ${watch ? '' : `<button class="btn ${done ? 'primary' : ''}" style="margin-top:16px" data-act="to-results">${t(done ? 'Round over: check results' : 'Round over')}</button>
+  ${watch ? '' : `${done ? `<p class="small muted stuck" role="status">${t('Every trick is in. Moving to results…')} <button class="link inline" data-act="to-results">${t('Not moving? Tap here')}</button></p>`
+    : `<button class="btn" style="margin-top:16px" data-act="to-results">${t('Round over')}</button>`}
   <button class="link" data-act="fix-bids">${t('Fix a bid')}</button>`}`;
 }
 function destroyCard(destroyed, done) {
@@ -1055,6 +1066,20 @@ function awardsCard(g) {
 function doneView(g) {
   const rank = ranking(g);
   const tops = rank.filter(r => r.place === 1);
+  if (tvMode()) {
+    const a = awards(g);
+    return `
+    <section class="winner finale tv-finale ${S.finalAnim ? 'arrive' : ''}">
+      <div class="hero-flags">${tops.map(x => `<span class="hero-flag">${icon('crown', 'hero-crown')}${flag(x.id)}</span>`).join('')}</div>
+      <h1>${tops.length > 1 ? t('{names} win', { names: tops.map(x => esc(x.name)).join(' & ') }) : t('{name} wins', { name: esc(tops[0].name) })}</h1>
+      <p class="final-total"><b data-count="${tops[0].total}" data-key="${S.code}:final" data-plain="1">${plain(tops[0].total)}</b></p>
+    </section>
+    ${standingsLine(g, { full: true })}
+    <div class="tv-board"><table class="tv-grid" style="--rows:${rank.length}"><thead><tr><th>#</th><th>${t('Players')}</th><th>${t('Awards')}</th><th>${t('Total')}</th></tr></thead><tbody>
+      ${rank.map(x => `<tr style="--crew:${color(x.id)}"><td class="num place">${x.place}</td><td><span class="tv-who">${flag(x.id)}<b>${esc(x.name)}</b></span></td>
+        <td class="award">${a[x.id] ? `<span class="aw">${icon(a[x.id].icon, 'sm')}<b>${esc(a[x.id].title)}</b><small>${esc(a[x.id].line)}</small></span>` : ''}</td>
+        <td class="num total">${x.place === 1 ? icon('crown', 'crown') : ''}${plain(x.total)}</td></tr>`).join('')}</tbody></table></div>`;
+  }
   const hero = tops.map(r => `<span class="hero-flag">${icon('crown', 'hero-crown')}${flag(r.id)}</span>`).join('');
   return `
   <section class="winner finale ${S.finalAnim ? 'arrive' : ''}">

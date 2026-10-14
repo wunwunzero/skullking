@@ -983,3 +983,47 @@ body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 360px) / var(--r
 .tv-grid th { font-size: clamp(1rem, 1.3vw, 1.4rem); }
 .tv-grid .badge { font-size: clamp(.8rem, 1vw, 1.1rem); }
 body.table .tv-head { font-size: clamp(1.2rem, 1.8vw, 2rem); }
+
+/* ---------- improvements round: fallback, TV reveal + finale, compact home ---------- */
+.stuck { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin: 14px 2px 0; }
+.stuck .link.inline { opacity: 0; animation: appear .3s 4s both; }  /* only if the move really didn't happen */
+@keyframes appear { to { opacity: 1; } }
+.hero.compact { padding: 4vh 2px 2vh; }
+.hero.compact .mark { width: 48px; height: 48px; }
+.hero.compact h1 { font-size: clamp(1.9rem, 8vw, 2.4rem); margin-top: 10px; }
+.hero.compact p { font-size: .95rem; }
+/* TV reveal: one card per player, face down through the drumroll, flipping together */
+.tv-reveal { display: grid; grid-template-columns: repeat(var(--cols, 4), 1fr); gap: 24px; padding: 8vh 0 3vh; perspective: 1200px; }
+.tv-card { position: relative; aspect-ratio: 3 / 4; max-height: 58vh; margin: 0 auto; width: min(100%, calc(58vh * 3 / 4)); transform-style: preserve-3d; }
+.tv-card .face { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 8px; border-radius: 18px;
+  background: var(--surface); border: var(--hair) solid var(--line-strong); box-shadow: var(--shadow); backface-visibility: hidden; }
+.tv-card .face b { font-size: clamp(3rem, 7vw, 6rem); font-style: italic; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+.tv-card .face small { font-size: 1.2rem; color: var(--ink-2); }
+.tv-card .face .ava { width: 52px; height: 52px; border-radius: 13px; }
+.tv-card .back { background: linear-gradient(135deg, color-mix(in srgb, var(--crew) 22%, var(--surface)), var(--surface)); }
+.tv-card .back b { color: var(--ink-3); }
+.tv-card .front { transform: rotateY(180deg); }
+.tv-reveal.drum .tv-card { animation: shiver .12s linear infinite alternate; animation-delay: calc(var(--i) * -40ms); }
+.tv-reveal.flip .tv-card { animation: tvflip .9s var(--ease) both; animation-delay: calc(var(--i) * 140ms); }
+@keyframes tvflip { from { transform: rotateY(0); } to { transform: rotateY(180deg); } }
+.tv-verdict { justify-content: center; font-size: clamp(1.4rem, 2.4vw, 2.2rem); margin-top: 12px; }
+/* TV finale: a wide board under the winner */
+.tv-finale { padding-top: 1vh; }
+.tv-finale .hero-flag .ava { width: 72px; height: 72px; border-radius: 16px; }
+.tv-finale h1 { font-size: clamp(2.2rem, 4vw, 3.4rem); margin-top: 6px; }
+.tv-finale .final-total { margin-top: 2px; }
+.tv-finale .final-total b { font-size: clamp(2.4rem, 4.5vw, 4rem); }
+.tv-finale ~ .standings { margin: 6px 0; }
+.tv-finale ~ .tv-board .tv-grid td.num { font-size: clamp(1.5rem, 2.2vw, 2.4rem); }
+.tv-finale ~ .tv-board .tv-grid .tv-who b { font-size: clamp(1.2rem, 1.8vw, 1.8rem); }
+.tv-finale ~ .tv-board .tv-grid .tv-who .ava { width: 32px; height: 32px; }
+.tv-board { margin-top: 14px; }
+.tv-grid td.place { width: 60px; color: var(--ink-3); }
+.tv-grid td.award .aw { display: grid; grid-template-columns: 24px 1fr; column-gap: 10px; align-items: center; }
+.tv-grid td.award b { font-size: clamp(1.1rem, 1.6vw, 1.5rem); }
+.tv-grid td.award small { grid-column: 2; color: var(--ink-2); font-size: clamp(.9rem, 1.1vw, 1.1rem); }
+.tv-grid td.award .ico { color: var(--ink-3); }
+/* The finale board shares the screen with the winner, so its rows stay compact */
+body.table .tv-finale ~ .tv-board .tv-grid tbody tr { height: auto; }
+body.table .tv-finale ~ .tv-board .tv-grid td { padding: 8px 18px; }
+body.table .tv-finale ~ .standings { --lane-h: 44px; --lane-n: 44; }

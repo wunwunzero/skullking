@@ -453,6 +453,8 @@ export const DICT = {
     'Sea Witch': '海巫',
 
     // crews & history
+    "Every trick is in. Moving to results…": "所有墩都记完了。正在进入结果…",
+    "Not moving? Tap here": "没有跳转？点这里",
     "Tricks don't add up: check the numbers": "墩数对不上：请核对数字",
     "+20 a trick made · −10 a trick off": "命中每墩 +20 · 每差一墩 −10",
     "Skip for now": "先跳过",
@@ -1056,6 +1058,8 @@ export const DICT = {
     'Sea Witch': 'Ahli Sihir Laut',
 
     // crews & history
+    "Every trick is in. Moving to results…": "Semua trik sudah masuk. Beralih ke keputusan…",
+    "Not moving? Tap here": "Tak beralih? Tekan di sini",
     "Tricks don't add up: check the numbers": "Jumlah trik tak sama: semak nombor",
     "+20 a trick made · −10 a trick off": "+20 setiap trik tepat · −10 setiap trik lari",
     "Skip for now": "Langkau dulu",
