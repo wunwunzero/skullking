@@ -453,6 +453,12 @@ export const DICT = {
     'Sea Witch': '海巫',
 
     // crews & history
+    "+20 a trick made · −10 a trick off": "命中每墩 +20 · 每差一墩 −10",
+    "Skip for now": "先跳过",
+    "How many tricks will {name} win?": "{name} 会赢几墩？",
+    "How many tricks will you win?": "你会赢几墩？",
+    "Saved as you go. You can change it until the round is scored.": "会自动保存。本轮计分前都可以修改。",
+    "Tricks add up · add any bonuses, then score": "墩数对得上 · 有奖励分就加上，然后计分",
     "you": "你",
     "Locking in {n}…": "正在锁定 {n}…",
     "Someone’s phone away? Tap their chip to give them a trick.": "有人手机不在身边？点他的标签就能替他加一墩。",
@@ -1049,6 +1055,12 @@ export const DICT = {
     'Sea Witch': 'Ahli Sihir Laut',
 
     // crews & history
+    "+20 a trick made · −10 a trick off": "+20 setiap trik tepat · −10 setiap trik lari",
+    "Skip for now": "Langkau dulu",
+    "How many tricks will {name} win?": "Berapa trik {name} akan menang?",
+    "How many tricks will you win?": "Berapa trik anda akan menang?",
+    "Saved as you go. You can change it until the round is scored.": "Disimpan secara automatik. Boleh diubah sehingga pusingan dikira.",
+    "Tricks add up · add any bonuses, then score": "Jumlah trik betul · tambah bonus jika ada, kemudian kira",
     "you": "anda",
     "Locking in {n}…": "Mengunci {n}…",
     "Someone’s phone away? Tap their chip to give them a trick.": "Telefon seseorang tiada? Tekan cip mereka untuk beri satu trik.",

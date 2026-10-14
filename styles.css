@@ -951,3 +951,35 @@ body.table .tv-grid tbody tr { height: max(56px, calc((100dvh - 360px) / var(--r
   .code-chip { letter-spacing: .08em; padding: 0 9px 0 8px; gap: 5px; }
   #top .round b { font-size: .98rem; }
 }
+
+/* ---------- critique #7 ---------- */
+/* Names hold their width; long status chips wrap inside themselves; "Bid 2" stays together */
+.prow { grid-template-columns: 34px minmax(5.5em, 1fr) auto auto; }
+.prow > .chip { max-width: 11em; white-space: normal; text-align: right; line-height: 1.2; justify-self: end; }
+.bidtxt { white-space: nowrap; }
+/* Results save as you go */
+.saved-note { display: flex; align-items: center; gap: 6px; margin: 10px 2px 0; }
+.saved-note .ico { color: var(--good); }
+/* During play, toasts sit at the top, clear of the rows and give chips */
+.toast.top { top: calc(70px + env(safe-area-inset-top)); bottom: auto; transform: translateX(-50%) translateY(-160px); }
+.toast.top.on { transform: translateX(-50%) translateY(0); }
+/* Thin standings strip during play */
+.standings-strip { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 6px 0 10px; padding: 2px 0; }
+.standings-strip::-webkit-scrollbar { display: none; }
+.standings-strip > span { display: inline-flex; align-items: center; gap: 5px; flex: none; padding: 3px 9px 3px 4px; border-radius: 999px; background: var(--surface); box-shadow: inset 0 0 0 var(--hair) var(--line-strong); }
+.standings-strip > span.me { box-shadow: inset 0 0 0 1.5px var(--magenta); }
+.standings-strip .ava { width: 22px; height: 22px; border-radius: 50%; }
+.standings-strip b { font-style: italic; font-weight: 750; font-variant-numeric: tabular-nums; }
+.standings-strip .crown { width: 14px; height: 14px; color: var(--brass); }
+/* Standings Line: the last tick stays inside the line */
+.standings .scale .tick:last-child { transform: translateX(-100%); }
+.standings .water-label { color: var(--ink-2); }
+/* TV: type scales with the screen; the crew wash runs once along the row */
+.tv-grid td { background: none; }
+.tv-grid td:first-child { background: linear-gradient(90deg, color-mix(in srgb, var(--crew, transparent) 14%, transparent), transparent 100%); }
+.tv-grid .tv-who b { font-size: clamp(1.45rem, 2.4vw, 2.6rem); }
+.tv-grid td.num { font-size: clamp(1.9rem, 3vw, 3.4rem); }
+.tv-grid td.num small.of { font-size: .55em; color: var(--ink-3); font-weight: 650; }
+.tv-grid th { font-size: clamp(1rem, 1.3vw, 1.4rem); }
+.tv-grid .badge { font-size: clamp(.8rem, 1vw, 1.1rem); }
+body.table .tv-head { font-size: clamp(1.2rem, 1.8vw, 2rem); }
