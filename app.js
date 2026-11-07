@@ -24,6 +24,8 @@ const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ'; // no I / O
 const randomCode = n => Array.from(crypto.getRandomValues(new Uint32Array(n)), x => CODE_CHARS[x % CODE_CHARS.length]).join('');
 const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 
+// Shown at the foot of the home screen; bump with CACHE in sw.js so phones get the Refresh bar.
+const VERSION = 44;
 const $app = document.getElementById('app');
 const $top = document.getElementById('top');
 const $sheet = document.getElementById('sheet');
@@ -514,7 +516,8 @@ function homeView() {
   <button class="btn ghost" data-act="rules">${icon('book')} ${t('How scoring works')}</button>
   ${installTip()}
   ${langPicker()}
-  ${S.store.live ? '' : `<p class="note">${t('Local mode: games sync between tabs on this device only.')}</p>`}`;
+  ${S.store.live ? '' : `<p class="note">${t('Local mode: games sync between tabs on this device only.')}</p>`}
+  <p class="muted small" style="text-align:center;margin-top:18px">v${VERSION}</p>`;
 }
 
 // A one-time tip to put the app on the home screen, so it opens full-screen with no browser bar.
