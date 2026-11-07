@@ -69,8 +69,11 @@ export function sortedPlayers(game) {
   return Object.entries(game.players || {})
     .map(([id, p]) => ({ id, ...p }))
     .filter(p => p.left == null || p.left > (p.from || 1))
-    .sort((a, b) => a.order - b.order);
+    .sort(seatCmp);
 }
+// Seat order around the table; two players on the same order (two phones joining at once) are
+// told apart by id, so nobody is ever skipped.
+const seatCmp = (a, b) => (a.order ?? 0) - (b.order ?? 0) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 export const playsIn = (p, round) => !!p && (p.from || 1) <= round && (p.left == null || round < p.left);
 // The players dealt in to one round.
 export const playersIn = (game, round) => sortedPlayers(game).filter(p => playsIn(p, round));
@@ -79,8 +82,8 @@ export const roundsPlayed = (game, pid) => scoredRounds(game).filter(r => playsI
 
 // Next player dealt in to the round, going round the table from a seat (that player too if `inclusive`).
 function nextSeat(game, act, id, inclusive) {
-  const o = game.players?.[id]?.order ?? -1;
-  return (act.find(p => (inclusive ? p.order >= o : p.order > o)) || act[0]).id;
+  const me = { id, order: game.players?.[id]?.order ?? -1 };
+  return (act.find(p => (inclusive ? seatCmp(p, me) >= 0 : seatCmp(p, me) > 0)) || act[0]).id;
 }
 // Dealer rotates each round from firstDealer, skipping anyone not dealt in; the player after the
 // dealer bids/leads first.

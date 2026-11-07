@@ -1,1 +1,5 @@
 .impeccable/
+
+# live playtest harness output
+tests/live/out/
+tests/live/profile/

@@ -25,7 +25,7 @@ const randomCode = n => Array.from(crypto.getRandomValues(new Uint32Array(n)), x
 const QR_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js';
 
 // Shown at the foot of the home screen; bump with CACHE in sw.js so phones get the Refresh bar.
-const VERSION = 44;
+const VERSION = 45;
 const $app = document.getElementById('app');
 const $top = document.getElementById('top');
 const $sheet = document.getElementById('sheet');
@@ -201,9 +201,10 @@ function route() {
   if (S.crewCode) watchCrew(S.crewCode);
   if (code === S.code && (S.code || !S.crewCode)) return render();
   S.unsub?.(); S.unsub = null;
+  const oldCode = S.code;
   S.code = code.length === 4 ? code : null;
   if (!S.code && !S.crewCode && raw && !/^crew=/.test(raw)) toast(t('No game “{code}”. Game codes are 4 letters.', { code: raw.toUpperCase().slice(0, 8) }));
-  if (S.claimed && S.code) S.store.release(S.code, S.claimed).catch(() => {});
+  if (S.claimed && oldCode) S.store.release(oldCode, S.claimed).catch(() => {});
   S.changing = false;
   S.game = undefined; S.actingFor = null; S.drafts = {}; S.lastPhaseKey = null; S.sheet = null; S.claimed = null; S.nudgeSeen = null; S.prevX = {};
   renderSheet();
@@ -215,7 +216,12 @@ function route() {
   render();
 }
 window.addEventListener('hashchange', route);
-let resizeT; addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => { if (S.seat === 'watch' || S.game) render(); }, 150); });
+// Only a change that alters the layout redraws (a keyboard opening resizes some browsers' windows).
+let resizeT, lastW = innerWidth;
+addEventListener('resize', () => { clearTimeout(resizeT); resizeT = setTimeout(() => {
+  const modeChanged = document.body.classList.contains('fit') !== fitMode() || document.body.classList.contains('table') !== (S.seat === 'watch' && !!S.code && innerWidth >= 700);
+  if ((S.seat === 'watch' || S.game) && (innerWidth !== lastW || modeChanged)) { lastW = innerWidth; requestRender(); }
+}, 150); });
 
 function onGame(g) {
   const prev = S.game;
@@ -236,8 +242,8 @@ function onGame(g) {
       drumroll(wait / 1000);
       clearTimeout(S.drumTimer);
       S.drumTimer = setTimeout(() => {
-        chime(); buzz(60); render();
-        if (tvMode()) setTimeout(render, 4500);   // the TV holds the flipped cards, then settles to the grid
+        chime(); buzz(60); requestRender();
+        if (tvMode()) setTimeout(requestRender, 4500);   // the TV holds the flipped cards, then settles to the grid
         announce(`${t('All bids in.')} ${playersIn(g, g.round).map(p => `${p.name} ${b[p.id]}`).join(', ')}.`);
       }, wait);
     }
@@ -253,6 +259,10 @@ function onGame(g) {
     // A new phase or round starts at the top, so whoever scored from the bottom of the page
     // still sees the round card, the bid keys and the finale.
     if (S.lastPhaseKey && S.lastPhaseKey !== key && !S.sheet) S.toTop = true;
+    // A new step starts with no "editing" mark of this phone's own.
+    if (S.lastPhaseKey && S.lastPhaseKey !== key) S.editMarked = 0;
+    // Entering for someone from their row is for this step only: back to your own seat after.
+    if (S.lastPhaseKey && S.lastPhaseKey !== key && S.actingOnce) { S.actingFor = null; S.actingOnce = false; }
     S.lastPhaseKey = key;
     if (S.seat && S.seat !== 'watch' && !sortedPlayers(g).some(p => p.id === S.seat)) S.seat = null;
     // Rematch started on another phone: follow it, keeping this phone's seat.
@@ -266,22 +276,19 @@ function onGame(g) {
     }
     syncPresence(g);
     checkNudge(g);
-    // "Score before everyone locks in?" is open but everyone just did: go ahead.
+    // "Score anyway?" is open but another phone just scored: close it.
     if (S.ask?.score && (S.ask.score !== g.round || g.phase !== 'results')) setTimeout(() => actions.close(), 0);   // someone else scored
-    else if (S.ask?.score === g.round) {
-      const eff = effectiveResults(g, g.round);
-      if (playersIn(g, g.round).every(p => eff[p.id]?.src === 'confirmed')) setTimeout(() => actions['ask-yes'](), 0);
-    }
     maybeReveal(g);
     maybeResults(prev, g);
     // If another phone changed this player's saved round (entering for them), their copy wins.
+    // (This phone's own saves come straight back unchanged, so only a different copy counts.)
+    const same = (a, b) => JSON.stringify(cleanResult(a)) === JSON.stringify(cleanResult(b));
     for (const key of Object.keys(S.drafts)) {
-      const [r, pid] = key.split(':'), saved = g.results?.[r]?.[pid], mineNow = JSON.stringify(S.drafts[key]);
-      if (saved && JSON.stringify(saved) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== JSON.stringify(saved)) delete S.drafts[key];
+      const [r, pid] = key.split(':'), saved = g.results?.[r]?.[pid];
+      if (saved && !same(saved, prev?.results?.[r]?.[pid]) && !same(saved, S.drafts[key])) delete S.drafts[key];
     }
   }
-  if (typing()) S.renderHeld = true;
-  else render();
+  requestRender();
 }
 
 // Someone tapped "Nudge" on this phone's player.
@@ -290,7 +297,7 @@ function checkNudge(g) {
   if (S.nudgeSeen === null) { S.nudgeSeen = ts || 0; return; }
   if (ts && ts > S.nudgeSeen) {
     S.nudgeSeen = ts;
-    if (Date.now() - ts < 120000) {
+    if (S.store.now() - ts < 120000) {
       buzz([120, 60, 120]); chime();
       toast(t(g.phase === 'results' ? 'The crew is waiting for your tricks' : 'The crew is waiting for your bid'));
     }
@@ -333,24 +340,72 @@ function focusKey() {
   return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}${d.c ? `[data-c="${d.c}"]` : ''}` : null;
 }
 
-// A name being typed on this phone (join, add a player). A sync from another phone must not
-// redraw under it: the input would be replaced, the keyboard would close and the letters typed
-// so far would vanish. Those redraws wait until the typing ends (see onGame and the focusout below).
-function typing() {
+// Redraws that don't come from this phone's own tap (a sync from another phone, a crew update,
+// a timer, a resize, a new version) must never land under the user's hands: the element would be
+// replaced, the keyboard would close, the letters typed so far or a press in progress would be
+// lost. While this phone is busy they are held, and run once it is done.
+const TEXTY = 'input:not([type]), input[type="text"], input[type="search"], textarea, select';
+function busy() {
+  if (S.pressing) return true;
   const a = document.activeElement;
-  return !!a && $app.contains(a) && a.matches('input[type="text"]');
+  return !!a && ($app.contains(a) || $sheet.contains(a)) && a.matches(TEXTY);
 }
-$app.addEventListener('focusout', e => {
-  // Focus moving to the form's own Join button is not the end of typing: the submit renders.
-  if (S.renderHeld && !(e.relatedTarget && $app.contains(e.relatedTarget))) render();
+function requestRender() {
+  if (busy()) { S.renderHeld = true; return; }
+  S.external = true;
+  render();
+}
+function flushRender() { if (S.renderHeld && !busy()) requestRender(); }
+// Belt and braces: if a browser never reports the end of typing, catch up within a second anyway.
+setInterval(flushRender, 1000);
+// Typing ends when focus leaves the box (not for the form's own button: its submit renders).
+document.addEventListener('focusout', e => {
+  if (!S.renderHeld) return;
+  const to = e.relatedTarget;
+  if (to && to.form && to.form === e.target.form) return;
+  setTimeout(flushRender, 0);
 });
+// A finger (or mouse) down on a control holds redraws until it lifts, so the tap still lands on
+// the same button. The click fires right after pointerup; the flush waits for it.
+document.addEventListener('pointerdown', e => {
+  if (!e.target.closest?.('[data-act], button, a, summary, label')) return;
+  S.pressing = true;
+  clearTimeout(S.pressTimer); S.pressTimer = setTimeout(() => { S.pressing = false; flushRender(); }, 4000);
+}, true);
+const release = () => { if (!S.pressing) return; setTimeout(() => { S.pressing = false; clearTimeout(S.pressTimer); flushRender(); }, 60); };
+document.addEventListener('pointerup', release, true);
+document.addEventListener('pointercancel', release, true);
+// Android's back button closes the keyboard but leaves the box focused: treat a keyboard closing
+// (the visual viewport growing back) as the end of typing.
+if (window.visualViewport) {
+  let vh = visualViewport.height;
+  visualViewport.addEventListener('resize', () => {
+    const grew = visualViewport.height - vh > 150; vh = visualViewport.height;
+    if (grew && S.renderHeld) { document.activeElement?.blur?.(); setTimeout(flushRender, 0); }
+  });
+}
+// Return in a setup name box moves to the next box instead of creating the game early.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' || !e.target.matches?.('[data-form=setup] input[data-idx]')) return;
+  e.preventDefault();
+  const boxes = [...document.querySelectorAll('[data-form=setup] input[data-idx]')], i = boxes.indexOf(e.target);
+  if (boxes[i + 1]) boxes[i + 1].focus(); else e.target.blur();
+});
+// Open folds (Records, Past seasons) stay open across redraws.
+document.addEventListener('toggle', e => { const f = e.target.dataset?.fold; if (f) (S.folds ||= {})[f] = e.target.open; }, true);
 
 const fitMode = () => !!S.game && !!S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700 && innerHeight >= 700;
 function render() {
   S.renderHeld = false;
+  const external = S.external; S.external = false;
+  // Scroll positions inside the page survive a redraw (a new phase still starts at the top).
+  const keep = sel => { const e = document.querySelector(sel); return e ? [e.scrollTop, e.scrollLeft] : null; };
+  const scrolls = { '.fit-scroll': keep('#app .fit-scroll'), '.standings-strip': keep('#app .standings-strip'), '.tbl-wrap': keep('#app .tbl-wrap') };
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
   // Whatever is half-typed in a name box survives the redraw.
-  const typed = [...$app.querySelectorAll('form[data-form] input[type="text"]')].map(i => [`${i.form.dataset.form}/${i.name}`, i.value]);
+  // (Only on redraws from outside: this phone's own taps, e.g. removing a setup row, already saved
+  // what was typed, and restoring by box name would put names back in the wrong rows.)
+  const typed = external ? [...$app.querySelectorAll('form[data-form] input:not([type]), form[data-form] input[type="text"]')].map(i => [`${i.form.dataset.form}/${i.name}`, i.value]) : [];
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   // Bidding and playing fit the phone: the page doesn't scroll, the player list does (inside its box).
   // Tall enough (700px+) to hold the action card at full size: the page stays put and the player
@@ -363,7 +418,7 @@ function render() {
   else if (S.game === undefined) { $app.innerHTML = `<p class="loading">${t('Finding the ship…')}</p>`; }
   else if (S.game === null) {
     $app.innerHTML = `<div class="card"><h2>${t('No game “{code}”', { code: esc(S.code) })}</h2><p class="muted">${t('Check the code with whoever started the game.')}</p>
-      <form class="join" data-form="join" style="margin:14px 0"><input name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
+      <form class="join" data-form="join" style="margin:14px 0"><input type="text" name="code" maxlength="5" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
       <button class="btn ink">${t('Join')}</button></form>
       <button class="btn ghost" data-act="home">${t('Back')}</button></div>`;
   }
@@ -383,19 +438,16 @@ function render() {
   // Never mid-round: a strip appearing above the bid keys would move them under a thumb.
   const calm = !S.code || !S.game || ['lobby', 'done'].includes(S.game.phase) || (S.game.phase === 'bidding' && !Object.keys(S.game.bids?.[S.game.round] || {}).length);
   if (S.updateReady && calm) $app.insertAdjacentHTML('afterbegin', `<div class="update-bar" role="status"><span>${icon('refresh', 'sm')}${t('A new version is ready')}</span><button class="btn" data-act="reload-app">${t('Refresh')}</button></div>`);
+  for (const [sel, v] of Object.entries(scrolls)) { const e = v && document.querySelector(`#app ${sel}`); if (e) { e.scrollTop = v[0]; e.scrollLeft = v[1]; S.keptStrip = sel === '.standings-strip' || S.keptStrip; } }
   if (S.toTop) {
-    S.toTop = false;
+    S.toTop = false; S.keptStrip = false;
     window.scrollTo(0, 0);
     document.querySelector('.fit-scroll')?.scrollTo(0, 0);
   }
-  if (!sheetFocused) renderSheet();
-  else if (S.sheet?.kind === 'seating') {
-    // Buttons only (no typing to lose): redraw with the new order and keep focus on the same control.
-    const a = document.activeElement, sel = a?.dataset?.act ? `#sheet [data-act="${a.dataset.act}"][data-id="${a.dataset.id}"]` : null;
-    renderSheet();
-    if (sel) document.querySelector(sel)?.focus();
-  }
+  // The open sheet follows the game too (a box being typed in holds the whole redraw, above).
+  renderSheet();
   afterRender();
+  S.keptStrip = false;
   const back = fk && document.querySelector(fk);
   if (back && !back.disabled) back.focus({ preventScroll: true });
   else if (hadFocus && !sheetFocused) {
@@ -442,7 +494,7 @@ function afterRender() {
   if (strip) {
     const mine = strip.querySelector('.me'), fade = () => strip.classList.toggle('more', strip.scrollLeft + strip.clientWidth < strip.scrollWidth - 2);
     const lead = strip.querySelector('.lead');
-    if (mine && mine !== lead && mine.offsetLeft + mine.offsetWidth > strip.clientWidth) strip.scrollLeft = mine.offsetLeft - (lead ? lead.offsetWidth + 12 : 24);
+    if (!S.keptStrip && mine && mine !== lead && mine.offsetLeft + mine.offsetWidth > strip.clientWidth) strip.scrollLeft = mine.offsetLeft - (lead ? lead.offsetWidth + 12 : 24);
     fade(); strip.onscroll = fade;
   }
   const c = document.querySelector('[data-count]');
@@ -470,7 +522,7 @@ function afterRender() {
   document.documentElement.style.setProperty('--dock-h', dock ? `${dock.offsetHeight}px` : '0px');
   // When the round deltas finish fading, redraw once so their space in the tags closes up.
   if (S.deltaUntil > Date.now() && !S.deltaTimer) {
-    S.deltaTimer = setTimeout(() => { S.deltaTimer = null; S.deltaUntil = 0; render(); }, S.deltaUntil - Date.now() + 50);
+    S.deltaTimer = setTimeout(() => { S.deltaTimer = null; S.deltaUntil = 0; requestRender(); }, S.deltaUntil - Date.now() + 50);
   }
 }
 
@@ -508,7 +560,7 @@ function homeView() {
   : `<button class="btn primary" data-act="new">${icon('plus')} ${t('New game')}</button>`}
   <div class="card">
     <h2 class="t3">${t('Join a game or crew')}</h2>
-    <form class="join" data-form="join"><input name="code" maxlength="5" autocomplete="off" autocapitalize="characters" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
+    <form class="join" data-form="join"><input type="text" name="code" maxlength="5" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" enterkeyhint="go" placeholder="CODE" aria-label="${t('Game or crew code')}" required>
     <button class="btn ink">${t('Join')}</button></form>
   </div>
   ${myCrews().length ? `<button class="btn ghost" data-act="new">${icon('plus')} ${t('One-off game (not saved)')}</button>` : ''}
@@ -522,7 +574,7 @@ function homeView() {
 
 // A one-time tip to put the app on the home screen, so it opens full-screen with no browser bar.
 let installEvent = null;
-addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; if (!S.code) render(); });
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installEvent = e; if (!S.code) requestRender(); });
 const isStandalone = () => matchMedia('(display-mode: standalone)').matches || !!navigator.standalone;
 // Safari and the home-screen app keep separate memories on iOS, so a QR scanned in Safari
 // forgets your seat and character. A quick hint sends people back to the installed app.
@@ -565,7 +617,7 @@ function setupView() {
   const row = (n, i) => `
       <div class="name-row">
         ${members[i] && crewData?.members?.[members[i]] ? `<span class="member-name">${memberTile(crewData.members[members[i]])}<b>${esc(n)}</b></span>${i ? '' : `<button type="button" class="link inline not-me" data-act="setup-not-me">${t('Not you?')}</button>`}`
-          : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" placeholder="${i ? t('Name') : t('Your name')}" autocomplete="${i ? 'off' : 'nickname'}" data-idx="${i}" ${i ? '' : 'required'}>`}
+          : `<input type="text" name="n${i}" value="${esc(n)}" maxlength="24" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="next" placeholder="${i ? t('Name') : t('Your name')}" autocomplete="${i ? 'off' : 'nickname'}" data-idx="${i}" ${i ? '' : 'required'}>`}
         ${i ? `<button type="button" class="x" data-act="rm-name" data-i="${i}" aria-label="${n ? t('Remove {name}', { name: esc(n) }) : t('Remove player {n}', { n: i + 1 })}">${icon('close')}</button>` : members[0] ? '' : '<span class="x-space"></span>'}
       </div>`;
   return `
@@ -592,17 +644,17 @@ function setupView() {
       ${[['kraken', 'Kraken'], ['whale', 'White Whale'], ['loot', 'Loot']].map(([k, l]) =>
         `<button type="button" aria-pressed="${!!S.setup.exp[k]}" class="${S.setup.exp[k] ? 'on' : ''}" data-act="toggle-exp" data-k="${k}">${icon(k)}${t(l)}</button>`).join('')}
     </div>
-    <button class="btn primary" style="margin-top:20px">${t('Create game')}</button>
+    <button class="btn primary" style="margin-top:20px" ${S.submitting ? 'disabled' : ''}>${t('Create game')}</button>
     <p class="small muted" style="margin:8px 2px 0">${t('Next: show the code. Seating and who deals are set in the lobby.')}${crew ? ` ${t('Saved to {crew} when the game finishes.', { crew: esc(crewData?.name || '') })}` : ''}</p>
     <button type="button" class="btn ghost" data-act="cancel-setup">${t('Cancel')}</button>
   </form>`;
 }
 
 async function createGame(names, dealer, opts = {}) {
-  let code;
-  for (let i = 0; i < 8; i++) {
-    code = randomCode(4);
-    if (!(await S.store.exists(code))) break;
+  let code = opts.code;
+  for (let i = 0; i < 8 && !code; i++) {
+    const c = randomCode(4);
+    if (!(await S.store.exists(c))) code = c;
   }
   const players = {}, members = opts.members || [];
   // A crew's last winner gets the Skull King; everyone else keeps the character they last played.
@@ -613,7 +665,7 @@ async function createGame(names, dealer, opts = {}) {
       .filter(([pid, a]) => CREW[a] && (a !== 'skullking' || pid === opts.champion)));
   }
   names.forEach((n, i) => {
-    players['p' + i] = { name: n, order: i, ...(opts.avatars?.['p' + i] ? { avatar: opts.avatars['p' + i] } : {}), ...(opts.crew && members[i] ? { member: members[i] } : {}) };
+    players['p' + i] = { name: n, order: i, ...(opts.noPhone?.includes(i) ? { noPhone: true } : {}), ...(opts.avatars?.['p' + i] ? { avatar: opts.avatars['p' + i] } : {}), ...(opts.crew && members[i] ? { member: members[i] } : {}) };
   });
   const game = { createdAt: Date.now(), phase: 'lobby', round: 1, firstDealer: 'p' + dealer, players, scoring: opts.scoring || 'classic' };
   if (opts.champion) game.champion = opts.champion;
@@ -621,10 +673,9 @@ async function createGame(names, dealer, opts = {}) {
   const exp = Object.fromEntries(Object.entries(opts.exp || {}).filter(([, v]) => v));
   if (Object.keys(exp).length) game.expansions = exp;
   await S.store.create(code, game);
-  if (opts.noPhone?.length) S.store.update(code, Object.fromEntries(opts.noPhone.map(i => [`players/p${i}/noPhone`, true]))).catch(() => {});
   if (opts.crew) S.store.updateCrew(opts.crew, { current: code }).catch(() => {});
   rememberCreated(code, game.createdAt);
-  saveSeat(code, 'p0');
+  if (!opts.code) saveSeat(code, 'p0');   // the host sits in p0 (a rematch carries each phone's own seat)
   S.setup = null;
   location.hash = code;
 }
@@ -656,7 +707,7 @@ function seatView() {
   ${canJoin ? `${crewOpen.length ? `<div class="toggles away join-members">${crewOpen.map(([m, x]) => `<button type="button" data-act="join-member" data-m="${m}">${memberTile(x)}${esc(x.name)}</button>`).join('')}</div>
     <p class="muted small" style="margin:12px 2px 6px">${t('Not in the crew yet?')}</p>` : ''}
     <form class="join-name" data-form="join-name">
-      <input type="text" name="name" maxlength="24" value="${esc(crewOpen.length || ps.some(p => p.name.toLowerCase() === myName().toLowerCase()) ? '' : myName())}" placeholder="${t('Your name')}" aria-label="${t('Your name')}" autocomplete="nickname" required>
+      <input type="text" name="name" maxlength="24" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="go" value="${esc(crewOpen.length || ps.some(p => p.name.toLowerCase() === myName().toLowerCase()) ? '' : myName())}" placeholder="${t('Your name')}" aria-label="${t('Your name')}" autocomplete="nickname" required>
       <button class="btn primary">${t('Join')}</button>
     </form>` : ''}
   ${ps.length ? `<h3 class="t3 setup-h">${t(canJoin ? 'Already at the table' : 'Pick your name')}</h3><div class="seat-list">${seats}</div>` : ''}
@@ -685,6 +736,12 @@ async function joinAs(nm, member = null) {
   for (const id of PIDS) {
     if (S.game.players[id]) continue;
     if (await S.store.createIfMissing(S.code, `players/${id}`, player)) {
+      const now = S.game, clash = Object.entries(now.players || {}).some(([pid, p]) => pid !== id && p.order === order);
+      if (clash) {
+        const used2 = new Set(Object.entries(now.players).filter(([pid]) => pid !== id).map(([, p]) => p.order));
+        const free = Math.max(-1, ...used2) + 1 <= 7 ? Math.max(-1, ...used2) + 1 : [0, 1, 2, 3, 4, 5, 6, 7].find(o => !used2.has(o));
+        if (free != null) update({ [`players/${id}/order`]: free });
+      }
       rememberMe(g.crew, member, nm);
       if (from > 1) toast(t('{name} joins from round {r}', { name: nm, r: from }));
       return actions.seat({ dataset: { id } });
@@ -849,7 +906,7 @@ function standingsLine(g, { full = false } = {}) {
 
 // During play only trick counts matter: the standings shrink to one line, leader first.
 function standingsStrip(g) {
-  const rank = ranking(g), top = rank[0]?.total, scored = g.round > 1;
+  const rank = ranking(g).filter(x => !gone(g, g.players[x.id])), top = rank[0]?.total, scored = g.round > 1;
   const groups = [];
   for (const x of rank) { const last = groups[groups.length - 1]; if (last && last.total === x.total) last.ids.push(x.id); else groups.push({ total: x.total, ids: [x.id] }); }
   return `<div class="standings-strip" role="img" aria-label="${t('Standings')}: ${esc(rank.map(x => `${x.name}${x.id === me() ? ` (${t('you')})` : ''} ${plain(x.total)}`).join(', '))}">
@@ -1087,7 +1144,7 @@ function playingView(g) {
   if (flip) {
     // The flipped bids hold the stage, big, for a moment before settling into the reference strip.
     S.flipPending = false; S.stageUntil = Date.now() + 2600;
-    clearTimeout(S.stageTimer); S.stageTimer = setTimeout(() => { S.settle = true; render(); }, 2700);
+    clearTimeout(S.stageTimer); S.stageTimer = setTimeout(() => { S.settle = true; requestRender(); }, 2700);
   }
   const stage = !drum && S.stageUntil > Date.now() && !watch;
   const settle = !stage && S.settle; S.settle = false;
@@ -1133,6 +1190,13 @@ function destroyCard(destroyed, done) {
 const tricksTapped = (g, r) => playersIn(g, r).reduce((s, p) => s + (g.live?.[r]?.[p.id] || 0), 0) + (g.destroyed?.[r] || 0);
 
 // ---------- results ----------
+// A round's result in one canonical form (tricks, then any bonuses held, in a fixed order).
+function cleanResult(x) {
+  if (!x) return null;
+  const out = { tricks: x.tricks || 0 };
+  for (const k of Object.keys(BONUS)) if (x[k]) out[k] = x[k];
+  return out;
+}
 function draftFor(g, r, pid) {
   const key = `${r}:${pid}`;
   if (S.drafts[key]) return S.drafts[key];
@@ -1199,13 +1263,13 @@ const bonusStepper = (act, k, val, hint) =>
 
 // Who's in the middle of changing their round (on another phone): a timestamp each phone refreshes
 // while it edits, so Score can wait for them. Stale 15 s after their last bonus tap.
-function isEditing(g, pid) { return g.phase === 'results' && Date.now() - (g.editing?.[pid] || 0) < 15000; }
+function isEditing(g, pid) { return g.phase === 'results' && S.store.now() - (g.editing?.[pid] || 0) < 15000; }
 function editorsElsewhere(g, r) {
   const ps = playersIn(g, r).filter(p => p.id !== S.seat && p.id !== S.actingFor && isEditing(g, p.id));
   // Redraw when the oldest mark runs out, so a phone that went quiet stops holding Score back.
   if (ps.length) {
-    const next = Math.min(...ps.map(p => g.editing[p.id] + 15000 - Date.now()));
-    clearTimeout(S.editTimer); S.editTimer = setTimeout(render, Math.max(500, next + 100));
+    const next = Math.min(...ps.map(p => g.editing[p.id] + 15000 - S.store.now()));
+    clearTimeout(S.editTimer); S.editTimer = setTimeout(requestRender, Math.max(500, next + 100));
   }
   return ps;
 }
@@ -1215,7 +1279,7 @@ function markEditing(on = true) {
   if (on && Date.now() - (S.editMarked || 0) < 4000) return;
   S.editMarked = on ? Date.now() : 0;
   // Best effort: an older rules file may not allow it yet, and that must never show an error.
-  S.store.update(S.code, { [`editing/${who}`]: on ? Date.now() : null }).catch(() => {});
+  S.store.update(S.code, { [`editing/${who}`]: on ? S.store.now() : null }).catch(() => {});
 }
 function namesList(ps) { return ps.map(p => esc(p.name)).join(', '); }
 
@@ -1354,10 +1418,22 @@ function renderSheet() {
   $sheet.hidden = false;
   // Only the sheet is reachable while it is open.
   $top.inert = true; $app.inert = true;
+  // A redraw of an open sheet keeps what was typed or chosen, where it was scrolled, and the
+  // control that had focus.
+  const was = opening ? null : {
+    fk: $sheet.contains(document.activeElement) ? focusKey() : null,
+    fields: [...$sheet.querySelectorAll('input, select, textarea')].filter(f => f.name).map(f => [f.name, f.value]),
+    scroll: [...$sheet.querySelectorAll('.panel, .tbl-wrap')].map(e => [e.scrollTop, e.scrollLeft]),
+  };
   $sheet.innerHTML = `<div class="panel" role="dialog" aria-modal="true" aria-label="${esc(title)}"><div class="head"><h2 tabindex="-1">${esc(title)}</h2><button class="icon-btn outline" data-act="close" aria-label="${t('Close')}">${icon('close')}</button></div>${body}</div>`;
   if (s.kind === 'share' || s.kind === 'crewshare') drawQR();
-  if (s.kind === 'newcrew') $sheet.querySelector('input')?.focus();
-  if (opening && s.kind !== 'newcrew') $sheet.querySelector('h2')?.focus();
+  if (was) {
+    for (const [n, v] of was.fields) { const f = $sheet.querySelector(`[name="${n}"]`); if (f && (f.tagName !== 'SELECT' || [...f.options].some(o => o.value === v))) f.value = v; }
+    [...$sheet.querySelectorAll('.panel, .tbl-wrap')].forEach((e, i) => { if (was.scroll[i]) { e.scrollTop = was.scroll[i][0]; e.scrollLeft = was.scroll[i][1]; } });
+    if (was.fk) $sheet.querySelector(was.fk)?.focus({ preventScroll: true });
+  }
+  if (opening && s.kind === 'newcrew') $sheet.querySelector('input')?.focus();
+  else if (opening) $sheet.querySelector('h2')?.focus();
 }
 
 function scoresSheet() {
@@ -1463,7 +1539,7 @@ function watchCrew(code) {
       saveCrews([{ code, name: c.name }, ...list]);
       if (S.game) saveToCrew(null, S.game);
     }
-    if (!S.code || S.game) render();
+    if (!S.code || S.game) requestRender();
   });
 }
 
@@ -1479,8 +1555,12 @@ function memberFor(nm, patch) {
 // A finished crew game is saved to the crew's history (any phone can do it; the write is the
 // same from every phone). If the final scoring is undone, it comes back out.
 function saveToCrew(prev, g) {
+  // A game is saved when this phone sees it finish (or the crew loads just after), and kept up to
+  // date while it's in the history; a game someone removed from the history stays removed.
+  if (g.phase === 'done' && prev && prev.phase !== 'done') S.finishPending = S.code;
   if (!g.crew || !S.crew || S.crewWatching !== g.crew) return;
-  if (g.phase === 'done') {
+  if (g.phase === 'done' && (S.finishPending === S.code || S.crew.games?.[S.code])) {
+    S.finishPending = null;
     const keys = Object.keys(g.history || {}).sort();
     const pick = (o, ks) => Object.fromEntries(ks.filter(k => o?.[k] != null).map(k => [k, o[k]]));
     const snap = JSON.parse(JSON.stringify({
@@ -1551,7 +1631,7 @@ function crewHomeView(c) {
     ${crewGames(c, season).length < 5 ? seasonChart(c, season) : ''}`
     : `<p class="note">${t(tab === 'all' || !games.length ? 'No finished games yet. Play all 10 rounds and the game lands here.' : 'No games this season yet.')}</p>`}
 
-  ${games.length ? `<details class="fold"><summary><h2 class="t3">${t('Records')}</h2>${icon('lead', 'sm')}</summary><ul class="hl records">
+  ${games.length ? `<details class="fold" data-fold="records" ${S.folds?.records ? 'open' : ''}><summary><h2 class="t3">${t('Records')}</h2>${icon('lead', 'sm')}</summary><ul class="hl records">
     ${recLine('highGame', 'Highest score', x => plain(x.value))}
     ${recLine('bigRound', 'Biggest round', x => `${signed(x.value)} (${t('Round {r}', { r: x.round })})`)}
     ${recLine('streak', 'Longest bid streak', x => tn(x.value, '{n} in a row', '{n} in a row'))}
@@ -1569,7 +1649,7 @@ function crewHomeView(c) {
   }).join('')}</div>
   ${games.length > shown.length ? `<button class="link" data-act="crew-more">${t('Show all {n} games', { n: games.length })}</button>` : ''}` : ''}
 
-  ${past.length ? `<details class="fold"><summary><h2 class="t3">${t('Past seasons')}</h2>${icon('lead', 'sm')}</summary>
+  ${past.length ? `<details class="fold" data-fold="past" ${S.folds?.past ? 'open' : ''}><summary><h2 class="t3">${t('Past seasons')}</h2>${icon('lead', 'sm')}</summary>
   <div class="board">${past.map(s => `<div class="prow">${memberTile(c.members?.[s.champion])}
     <div class="who"><b>${t('Season {n}', { n: s.n })}</b><span>${fmtDate(s.start)} – ${fmtDate(s.end)} · ${tn(s.games, '{n} game', '{n} games')}</span></div>
     <span class="chip">${icon('crown')}${esc(s.champion ? mname(s.champion) : '–')}</span></div>`).join('')}</div></details>` : ''}
@@ -1719,7 +1799,7 @@ function crewShareSheet() {
 
 function newCrewSheet() {
   return `<p class="small muted" style="margin-top:0">${t('A crew keeps every finished game, a leaderboard and everyone’s stats, shared by the whole group. One-off games still work without one.')}</p>
-  <form class="add-player" data-form="new-crew"><input type="text" name="name" maxlength="30" placeholder="${t('Crew name, e.g. Friday Pirates')}" aria-label="${t('Crew name')}" autocomplete="off" required>
+  <form class="add-player" data-form="new-crew"><input type="text" name="name" maxlength="30" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${t('Crew name, e.g. Friday Pirates')}" aria-label="${t('Crew name')}" autocomplete="off" required>
     <button class="btn primary">${t('Start the crew')}</button></form>`;
 }
 
@@ -1741,7 +1821,7 @@ function rosterSheet() {
     : full ? `<p class="small muted">${t('All 8 seats are used in this game.')}</p>`
     : `<form class="add-player" data-form="add-player">
       <h3 class="t3">${t('Add a player')}</h3>
-      <input type="text" name="name" maxlength="24" placeholder="${t('Name')}" autocomplete="off" aria-label="${t('Name')}" required>
+      <input type="text" name="name" maxlength="24" autocapitalize="words" autocorrect="off" spellcheck="false" enterkeyhint="done" placeholder="${t('Name')}" autocomplete="off" aria-label="${t('Name')}" required>
       <label class="small muted" for="sits-after">${t('Sits after')}</label>
       <select id="sits-after" name="after">${ps.map((p, i) => `<option value="${p.id}" ${i === ps.length - 1 ? 'selected' : ''}>${esc(p.name)}</option>`).join('')}</select>
       <button class="btn primary">${t('Add player')}</button>
@@ -1763,10 +1843,9 @@ function addPlayer(nm) {
     member = memberFor(nm, cp);
     if (Object.keys(cp).length) S.store.updateCrew(g.crew, cp).catch(() => {});
   }
-  const patch = { [`players/${id}`]: { name: nm, order: at, ...(from > 1 ? { from } : {}), ...(member ? { member } : {}) } };
+  const patch = { [`players/${id}`]: { name: nm, order: at, noPhone: true, ...(from > 1 ? { from } : {}), ...(member ? { member } : {}) } };
   for (const [pid, p] of Object.entries(g.players)) if (p.order >= at) patch[`players/${pid}/order`] = p.order + 1;
   update(patch);
-  S.store.update(S.code, { [`players/${id}/noPhone`]: true }).catch(() => {});
   toast(from > 1 ? t('{name} joins from round {r}', { name: nm, r: from }) : t('{name} joined the crew', { name: nm }));
 }
 
@@ -1774,7 +1853,9 @@ async function removePlayer(pid) {
   const g = S.game, r = g.round, p = g.players[pid];
   const now = g.phase === 'lobby' || g.phase === 'bidding' || (p.from || 1) > r;
   const left = now ? Math.max(r, p.from || 1) : r + 1;
-  if (playersIn({ ...g, players: { ...g.players, [pid]: { ...p, left } } }, Math.min(left, ROUNDS)).length < 2) return toast(t('A game needs at least 2 players'));
+  // In the lobby more friends can still join, so only the last player has to stay.
+  const remaining = playersIn({ ...g, players: { ...g.players, [pid]: { ...p, left } } }, Math.min(left, ROUNDS)).length;
+  if (g.phase === 'lobby' ? remaining < 1 : remaining < 2) return toast(t('A game needs at least 2 players'));
   const msg = g.phase === 'lobby' || (p.from || 1) > r ? t('Remove {name} from the game?', { name: p.name })
     : g.phase === 'bidding' ? t('{name} leaves now and sits out this round. If the cards are already dealt, deal again without them.', { name: p.name })
     : t('{name} leaves after this round. Their score so far stays on the board.', { name: p.name });
@@ -1782,9 +1863,29 @@ async function removePlayer(pid) {
   const ok = ask(t('Remove {name}?', { name: p.name }), msg, t('Remove'));
   S.ask.back = back;
   if (!(await ok)) return;
+  if (g.phase === 'lobby') {
+    // Before the game starts a removed player is deleted outright, freeing the seat for someone
+    // else (older rules refuse that: then they're marked as left instead).
+    const next = sortedPlayers(g).find(x => x.id !== pid && !gone(g, x))?.id;
+    const del = { [`players/${pid}`]: null, [`presence/${pid}`]: null };
+    S.store.update(S.code, del)
+      .then(() => { if (g.firstDealer === pid && next) update({ firstDealer: next }); })
+      .catch(() => update({ [`players/${pid}/left`]: left }));
+    return;
+  }
   const patch = { [`players/${pid}/left`]: left };
   if (g.phase === 'bidding') Object.assign(patch, { [`bids/${r}/${pid}`]: null, [`cannon/${r}/${pid}`]: null });
   update(patch);
+}
+
+// Move a player one seat up or down; every seat is renumbered 0..n-1 in the new order.
+function moveSeat(pid, by) {
+  const all = sortedPlayers(S.game), i = all.findIndex(p => p.id === pid), ps = all.filter(p => !gone(S.game, p));
+  const j = ps.findIndex(p => p.id === pid), other = ps[j + by];
+  if (i < 0 || !other) return;
+  const list = all.filter(p => p.id !== pid), at = list.findIndex(p => p.id === other.id) + (by > 0 ? 1 : 0);
+  list.splice(at, 0, all[i]);
+  update(Object.fromEntries(list.map((p, k) => [`players/${p.id}/order`, k]).filter(([path, k]) => S.game.players[path.split('/')[1]].order !== k)));
 }
 
 function seatingSheet() {
@@ -1910,7 +2011,9 @@ const actions = {
   home() { S.sheet = null; S.actingFor = null; location.hash = ''; S.setup = null; render(); },
   'crew-home'() { S.sheet = null; S.setup = null; render(); },
   new() {
-    S.setup = { names: [myName()], dealer: 0, scoring: 'classic', exp: {} }; render(); document.querySelector('[data-form=setup] input')?.focus();
+    S.setup = { names: [myName()], dealer: 0, scoring: 'classic', exp: {} }; render();
+    // Pop the keyboard only when there's a name to type (a remembered one is already filled in).
+    if (!S.setup.names[0]) document.querySelector('[data-form=setup] input')?.focus();
   },
   'cancel-setup'() { S.setup = null; render(); },
   'add-name'() { syncSetupInputs(); S.setup.names.push(''); if (S.setup.members) S.setup.members[S.setup.names.length - 1] = null; render(); document.querySelector(`[data-idx="${S.setup.names.length - 1}"]`)?.focus(); },
@@ -2023,7 +2126,7 @@ const actions = {
     render();
   },
   nudge(el) {
-    update({ [`nudge/${el.dataset.id}`]: Date.now() });
+    update({ [`nudge/${el.dataset.id}`]: S.store.now() });
     toast(t('Nudged {name}', { name: name(el.dataset.id) }));
   },
   cannon(el) {
@@ -2050,18 +2153,8 @@ const actions = {
   },
   seating() { S.sheet = { kind: 'seating' }; renderSheet(); },
   // Lobby seating: swap a player with the one before them; tap the circle for who deals first.
-  'seat-up'(el) {
-    const ps = sortedPlayers(S.game).filter(p => !gone(S.game, p)), i = ps.findIndex(p => p.id === el.dataset.id);
-    if (i < 1) return;
-    const a = ps[i], b = ps[i - 1];
-    update({ [`players/${a.id}/order`]: b.order, [`players/${b.id}/order`]: a.order });
-  },
-  'seat-down'(el) {
-    const ps = sortedPlayers(S.game).filter(p => !gone(S.game, p)), i = ps.findIndex(p => p.id === el.dataset.id);
-    if (i < 0 || i >= ps.length - 1) return;
-    const a = ps[i], b = ps[i + 1];
-    update({ [`players/${a.id}/order`]: b.order, [`players/${b.id}/order`]: a.order });
-  },
+  'seat-up'(el) { moveSeat(el.dataset.id, -1); },
+  'seat-down'(el) { moveSeat(el.dataset.id, 1); },
   'first-dealer'(el) { update({ firstDealer: el.dataset.id }); },
   noop() {},
   'pick-crew'(el) {
@@ -2088,6 +2181,10 @@ const actions = {
     const g = S.game, r = g.round, who = me();
     if (g.phase !== 'bidding' || !who) return;
     clearTimeout(S.bidTimer);
+    // A bid still locking in for someone else (your own, before you switched to bid for a friend)
+    // goes in now rather than being dropped.
+    const other = S.pendingBid;
+    if (other && other.who !== who && other.r === r) update({ [`bids/${other.r}/${other.who}`]: other.n });
     S.pendingBid = { r, who, n: +el.dataset.n, at: Date.now() };
     buzz(15);
     render();
@@ -2163,7 +2260,9 @@ const actions = {
         : sum !== n ? [t("Tricks don't add up"), `${tn(n, 'The tricks add up to {sum}, but {n} was won this round', 'The tricks add up to {sum}, but {n} were won this round', { sum })}. ${t('Whoever’s count is wrong gets the wrong score. You can undo scoring.')}`, t('Check the tricks')]
         : null;
       if (q) {
-        const ok = await ask(q[0], q[1], t('Score anyway'), { wait: q[2] });
+        const asking = ask(q[0], q[1], t('Score anyway'), { wait: q[2] });
+        S.ask.score = r;
+        const ok = await asking;
         if (!ok || S.game.phase !== 'results' || S.game.round !== r) return;
         return actions.score(true);
       }
@@ -2230,12 +2329,16 @@ const actions = {
     // Characters carry over; the Skull King is only kept by the new champion.
     const avatars = Object.fromEntries(ps.map((p, i) => [`p${i}`, p.avatar, p.id]).filter(([, a, pid]) => CREW[a] && (a !== 'skullking' || pid === champion)).map(([k, a]) => [k, a]));
     const champIdx = ps.findIndex(p => p.id === champion);
+    // Two phones tapping Rematch: whoever claims the old game's `next` first makes the new game;
+    // the other follows it, so the table never splits across two games.
+    let code;
+    for (let i = 0; i < 8 && !code; i++) { const c = randomCode(4); if (!(await S.store.exists(c))) code = c; }
+    if (!code || !(await S.store.createIfMissing(oldCode, 'next', code))) return;   // onGame follows `next`
     await createGame(ps.map(p => p.name), (firstIdx + 1) % ps.length, { scoring: g.scoring, exp: g.expansions, champion: champIdx >= 0 ? `p${champIdx}` : null, avatars,
+      code, noPhone: ps.map((p, i) => (p.noPhone ? i : -1)).filter(i => i >= 0),
       ...(g.crew ? { crew: g.crew, members: ps.map(p => p.member || null) } : {}) });
-    // Carry this phone's seat into the new game (same player ids p0..pN), and point the old game at it.
-    const code = location.hash.slice(1);
+    // Carry this phone's seat into the new game (same player ids p0..pN).
     if (prevSeat) saveSeat(code, prevSeat);
-    S.store.update(oldCode, { next: code });
   },
 };
 
@@ -2307,6 +2410,17 @@ document.addEventListener('keydown', e => {
 document.addEventListener('submit', async e => {
   e.preventDefault();
   const form = e.target;
+  // Creating or joining waits on the network: a second tap (or a redraw that re-enables the
+  // button) must not start it twice.
+  if (['setup', 'new-crew', 'join-name'].includes(form.dataset.form)) {
+    if (S.submitting) return;
+    S.submitting = true;
+    try { await submitForm(form); } finally { S.submitting = false; }
+    return;
+  }
+  submitForm(form);
+});
+async function submitForm(form) {
   if (form.dataset.form === 'join') {
     const code = new FormData(form).get('code').toUpperCase().replace(/[^A-Z]/g, '');
     if (code.length === 5) { location.hash = `crew=${code}`; return; }
@@ -2334,6 +2448,8 @@ document.addEventListener('submit', async e => {
     // Clear the box before the add: the redraw it triggers keeps whatever is still typed there.
     const nm = new FormData(form).get('name').trim().slice(0, 24);
     form.reset();
+    // Typing is done: let the sheet show the new player (a focused box holds redraws).
+    document.activeElement?.blur?.();
     addPlayer(nm);
   }
   if (form.dataset.form === 'setup') {
@@ -2358,7 +2474,7 @@ document.addEventListener('submit', async e => {
       await createGame(filled, dealer, opts);
     } catch (err) { console.error(err); toast(t('Could not create game')); form.querySelector('button:not([type])').disabled = false; }
   }
-});
+}
 
 // ---------- boot ----------
 (async function boot() {
@@ -2386,7 +2502,7 @@ function watchForUpdates() {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || S.updateReady) return;
     S.updateReady = true;
-    render();
+    requestRender();
   });
   navigator.serviceWorker.register('sw.js').then(reg => {
     const check = () => reg.update().catch(() => {});

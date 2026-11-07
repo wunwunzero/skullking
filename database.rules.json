@@ -23,6 +23,7 @@
           ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 10"
         },
         "firstDealer": {
+          ".write": "auth != null && data.exists() && root.child('games').child($code).child('phase').val() === 'lobby'",
           ".validate": "newData.isString() && newData.val().matches(/^p[0-7]$/)"
         },
         "champion": {
@@ -51,7 +52,7 @@
         },
         "players": {
           "$pid": {
-            ".write": "auth != null && !data.exists() && root.child('games').child($code).exists()",
+            ".write": "auth != null && root.child('games').child($code).exists() && (!data.exists() || (!newData.exists() && root.child('games').child($code).child('phase').val() === 'lobby'))",
             ".validate": "$pid.matches(/^p[0-7]$/) && newData.hasChildren(['name', 'order'])",
             "name": {
               ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 24"

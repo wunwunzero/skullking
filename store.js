@@ -31,10 +31,13 @@ async function firebaseStore() {
   const database = db.getDatabase(app);
   const gref = (code, path = '') => db.ref(database, `games/${code}${path ? '/' + path : ''}`);
   const cref = (code, path = '') => db.ref(database, `crews/${code}${path ? '/' + path : ''}`);
-  let connected = true, onConn = null;
+  let connected = true, onConn = null, offset = 0;
   db.onValue(db.ref(database, '.info/connected'), s => { connected = !!s.val(); onConn?.(connected); });
+  // Phones' clocks disagree; times shared between phones use the server's clock.
+  db.onValue(db.ref(database, '.info/serverTimeOffset'), s => { offset = s.val() || 0; });
   return {
     live: true,
+    now: () => Date.now() + offset,
     onConnection(fn) { onConn = fn; fn(connected); },
     async exists(code) { return (await db.get(gref(code, 'createdAt'))).exists(); },
     async create(code, game) { await db.set(gref(code), game); },
@@ -112,6 +115,7 @@ function localStore() {
   };
   const store = {
     live: false,
+    now: () => Date.now(),
     onConnection(fn) { fn(true); },
     async exists(code) { return !!all()[code]; },
     async create(code, game) { write(code, g => { g[code] = game; }); },

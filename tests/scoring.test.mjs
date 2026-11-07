@@ -253,3 +253,10 @@ test('capture bonuses need a trick; Loot does not', () => {
   assert.equal(bonusKeys(g, 2).length, 6);
   assert.equal(bonusKeys({}).length, 5);
 });
+
+test('two players on the same seat order both deal (simultaneous joins)', () => {
+  const g = { firstDealer: 'p0', players: { p0: { name: 'A', order: 0 }, p1: { name: 'B', order: 1 }, p2: { name: 'C', order: 2 }, p3: { name: 'D', order: 3 }, p4: { name: 'E', order: 3 } } };
+  const dealers = Array.from({ length: 10 }, (_, i) => dealerFor(g, i + 1));
+  assert.deepEqual(dealers.slice(0, 5), ['p0', 'p1', 'p2', 'p3', 'p4']);
+  assert.ok(dealers.includes('p4'));
+});
