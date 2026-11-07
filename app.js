@@ -278,7 +278,8 @@ function onGame(g) {
       if (saved && JSON.stringify(saved) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== mineNow && JSON.stringify(prev?.results?.[r]?.[pid]) !== JSON.stringify(saved)) delete S.drafts[key];
     }
   }
-  render();
+  if (typing()) S.renderHeld = true;
+  else render();
 }
 
 // Someone tapped "Nudge" on this phone's player.
@@ -330,9 +331,24 @@ function focusKey() {
   return d.act ? `[data-act="${d.act}"]${d.k ? `[data-k="${d.k}"]` : ''}${d.n ? `[data-n="${d.n}"]` : ''}${d.id ? `[data-id="${d.id}"]` : ''}${d.d ? `[data-d="${d.d}"]` : ''}${d.v ? `[data-v="${d.v}"]` : ''}${d.c ? `[data-c="${d.c}"]` : ''}` : null;
 }
 
+// A name being typed on this phone (join, add a player). A sync from another phone must not
+// redraw under it: the input would be replaced, the keyboard would close and the letters typed
+// so far would vanish. Those redraws wait until the typing ends (see onGame and the focusout below).
+function typing() {
+  const a = document.activeElement;
+  return !!a && $app.contains(a) && a.matches('input[type="text"]');
+}
+$app.addEventListener('focusout', e => {
+  // Focus moving to the form's own Join button is not the end of typing: the submit renders.
+  if (S.renderHeld && !(e.relatedTarget && $app.contains(e.relatedTarget))) render();
+});
+
 const fitMode = () => !!S.game && !!S.seat && S.seat !== 'watch' && !S.picking && (S.game.phase === 'bidding' || S.game.phase === 'playing') && innerWidth < 700 && innerHeight >= 700;
 function render() {
+  S.renderHeld = false;
   const fk = focusKey(), sheetFocused = $sheet.contains(document.activeElement), hadFocus = $app.contains(document.activeElement);
+  // Whatever is half-typed in a name box survives the redraw.
+  const typed = [...$app.querySelectorAll('form[data-form] input[type="text"]')].map(i => [`${i.form.dataset.form}/${i.name}`, i.value]);
   document.body.classList.toggle('table', S.seat === 'watch' && !!S.code && innerWidth >= 700);
   // Bidding and playing fit the phone: the page doesn't scroll, the player list does (inside its box).
   // Tall enough (700px+) to hold the action card at full size: the page stays put and the player
@@ -357,6 +373,10 @@ function render() {
       lobby: lobbyView, bidding: biddingView, playing: playingView, results: resultsView, done: doneView,
     }[g.phase] || lobbyView)(g);
     if (g.phase === 'lobby') drawQR();
+  }
+  for (const [key, v] of typed) {
+    const [f, n] = key.split('/'), i = $app.querySelector(`form[data-form="${f}"] input[name="${n}"]`);
+    if (i && i.value !== v) i.value = v;
   }
   // Never mid-round: a strip appearing above the bid keys would move them under a thumb.
   const calm = !S.code || !S.game || ['lobby', 'done'].includes(S.game.phase) || (S.game.phase === 'bidding' && !Object.keys(S.game.bids?.[S.game.round] || {}).length);
@@ -2308,8 +2328,10 @@ document.addEventListener('submit', async e => {
     if (form.isConnected) form.querySelector('button').disabled = false;
   }
   if (form.dataset.form === 'add-player') {
-    addPlayer(new FormData(form).get('name').trim().slice(0, 24));
+    // Clear the box before the add: the redraw it triggers keeps whatever is still typed there.
+    const nm = new FormData(form).get('name').trim().slice(0, 24);
     form.reset();
+    addPlayer(nm);
   }
   if (form.dataset.form === 'setup') {
     syncSetupInputs();
